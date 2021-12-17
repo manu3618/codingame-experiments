@@ -76,7 +76,7 @@ class Entity:
 
     def decide(self, game=None):
         """decide what to do"""
-        if random.random() < .7:
+        if random.random() < 0.7:
             try:
                 debug("barrels")
                 self.go_to_nearest_barrel(game)
@@ -90,7 +90,7 @@ class Entity:
         except CaribbeanException:
             debug("no opportunity to mine")
 
-        if random.random() < .1:
+        if random.random() < 0.1:
             debug("random move")
             goal = random.choice(list(get_neighbors_oddr(*self.coords).values()))
             cmd_move(*goal)
@@ -115,7 +115,7 @@ class Entity:
         """
         if forbidden is None:
             forbidden = []
-        debug({"goal": goal,  "source": self.coords, "forbidden": forbidden})
+        debug({"goal": goal, "source": self.coords, "forbidden": forbidden})
         # if goal in get_neighbors_oddr(*self.coords).values():
         #     debug("GOAL in neighbors")
         #     cmd_move(*goal)
@@ -135,7 +135,7 @@ class Entity:
         path = find_path_recurs(self.coords, goal, forbidden)
         idx = min(2, len(path))
         debug({"path": path, "idx": idx})
-        cmd_move(*path[idx-1])
+        cmd_move(*path[idx - 1])
 
     def go_to_nearest_barrel(self, game: pd.DataFrame):
         """print command to go the the nearest barrel"""
@@ -330,7 +330,7 @@ def find_path_recurs(start, end, forbidden=None, max_len=10):
     candidates = []
     for n in neighbors:
         try:
-            candidates.append([n,  *find_path_recurs(n, end, forbidden, max_len - 1)])
+            candidates.append([n, *find_path_recurs(n, end, forbidden, max_len - 1)])
         except StopIteration:
             continue
     if not candidates:
