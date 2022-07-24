@@ -133,7 +133,7 @@ fn get_most_threatening_zombie(
             continue;
         }
         let threat = get_threat_level(z, h, x, y);
-        if threat > 250 {
+        if threat > 260 {
             lost_humans.push(h.id);
             eprintln!("Debug message... lost humans {:?}", lost_humans);
             continue;
@@ -159,7 +159,7 @@ fn get_threat_level(zombie: &Zombie, human: &Human, x: i64, y: i64) -> i64 {
     let my_speed = 20_i64.pow(2);
     let zh = square_dist(human.x, human.y, zombie.x, zombie.y);
     let me_h = square_dist(x, y, human.x, human.y);
-    let threat = (me_h * my_speed) / (zh * zombie_speed) + human.id; // + zombie.id
+    let threat = (me_h * my_speed) / (zh * zombie_speed); //+ human.id; // + zombie.id
     eprintln!(
         "Debug message... z {}\t h{}\t ŧ {}",
         zombie.id, human.id, threat
