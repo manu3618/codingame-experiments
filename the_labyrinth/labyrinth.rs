@@ -90,10 +90,10 @@ fn main() {
 
         // Rick's next move (UP DOWN LEFT or RIGHT).
         if (next_step.0 as i32) < kr {
-            println!("DOWN")
+            println!("UP")
         }
         if (next_step.0 as i32) > kr {
-            println!("UP")
+            println!("DOWN")
         }
         if (next_step.1 as i32) < kc {
             println!("LEFT")
@@ -123,14 +123,18 @@ fn get_neighbours(p: (usize, usize), maze: &Vec<Vec<char>>) -> Vec<(usize, usize
     let height = maze.len();
     let width = maze[0].len();
     let mut neighbours = Vec::new();
+    let coords = vec![
+        (p.0, p.1 - 1),
+        (p.0, p.1 + 1),
+        (p.0 + 1, p.1),
+        (p.0 - 1, p.1),
+    ];
 
-    let row_min = cmp::max(p.0 - 1, 0);
-    let row_max = cmp::min(p.0 + 2, height);
-    let col_min = cmp::max(p.1 - 1, 0);
-    let col_max = cmp::min(p.1 + 2, width);
-
-    for (row, col) in iproduct!(row_min as usize..row_max, col_min as usize..col_max) {
-        if (row, col) == p {
+    for (row, col) in coords {
+        if row < 0 || row >= height {
+            continue;
+        }
+        if col < 0 || col >= width {
             continue;
         }
         if maze[row][col] != '#' {
