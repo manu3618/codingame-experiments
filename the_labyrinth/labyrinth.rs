@@ -1,5 +1,6 @@
 // https://www.codingame.com/ide/puzzle/the-labyrinth
 use itertools::iproduct;
+use rand::Rng;
 use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,6 +19,7 @@ macro_rules! parse_input {
 //     col: usize,
 // }
 
+static mut init_search: (usize, usize) = (0, 0);
 /**
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
@@ -35,10 +37,12 @@ fn main() {
 
     // row 0 and col 0 useless (avoid offset in coordinates)
     let mut maze = vec![vec!['?'; (c + 1) as usize]; (r + 1) as usize];
+    let mut loop_nb = 0;
     // eprintln!("time {:?}", now.elapsed());
 
     // game loop
     loop {
+        loop_nb += 1;
         eprintln!("loop time {:?}", now.elapsed());
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
@@ -65,9 +69,28 @@ fn main() {
             way_back = true;
         }
         if !way_back {
-            goal = match get_coordinates('C', &maze) {
+            let mut goal_char = '?';
+            if loop_nb > 1000 {
+                goal_char = 'C';
+            }
+            goal = match get_coordinates(goal_char, &maze) {
                 Some(x) => x,
-                None => get_coordinates('?', &maze).unwrap_or((0 as usize, 0 as usize)),
+                None => {
+                    if loop_nb % 10 == 0 {
+                        // change initial research point
+                        unsafe {
+                            init_search.0 += 1;
+                            init_search.1 += 1;
+                            if init_search.0 >= r as usize {
+                                init_search.0 = 0
+                            }
+                            if init_search.1 >= c as usize {
+                                init_search.1 = 0
+                            }
+                        }
+                    }
+                    get_coordinates('?', &maze).unwrap_or((0 as usize, 0 as usize))
+                }
             }
         } else {
             goal = get_coordinates('T', &maze).unwrap();
@@ -108,10 +131,19 @@ fn main() {
 fn get_coordinates(c: char, maze: &Vec<Vec<char>>) -> Option<(usize, usize)> {
     let height = maze.len();
     let width = maze[0].len();
-    // eprintln!("Debug message... AAAAA");
-    // if maze[height - 1][width - 1] == c {}
-    // eprintln!("Debug message... BBBBB");
-    for (row, col) in iproduct!(0..height, 0..width) {
+    let mut row_range: Vec<usize> = (0..height).collect();
+    let mut col_range: Vec<usize> = (0..width).collect();
+
+    // begin search eslwhere so that if there is several 'c', choose
+    // another another one
+    // row_range.rotate_left(rand::thread_rng().gen_range(1..=height));
+    // col_range.rotate_left(rand::thread_rng().gen_range(1..=width));
+    unsafe {
+        row_range.rotate_left(init_search.0);
+        col_range.rotate_left(init_search.1);
+    }
+
+    for (row, col) in iproduct!(row_range, col_range) {
         if maze[row][col] == c {
             return Some((row, col));
         }
@@ -154,6 +186,9 @@ fn get_path(start: (usize, usize), goal: (usize, usize), maze: &Vec<Vec<char>>) 
     let candidate_hop = get_neighbours(start, maze);
     if candidate_hop.len() == 1 {
         return candidate_hop[0];
+    }
+    if candidate_hop.contains(&goal) {
+        return goal;
     }
     for hop in candidate_hop.iter() {
         let mut values = HashSet::new();
