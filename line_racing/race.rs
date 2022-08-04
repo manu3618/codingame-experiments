@@ -17,6 +17,7 @@ macro_rules! parse_input {
 fn main() {
     // game loop
     let mut players: Vec<(usize, usize)> = Vec::new(); // coordinates of all players
+    players.resize(2, (0, 0)); // max number of players
     let mut next_step: (usize, usize) = (0, 0);
 
     // playgroung
@@ -24,6 +25,7 @@ fn main() {
     // '<n>' : trace let by player n
     let mut ground = vec![vec!['.'; 30_usize]; 20_usize];
     let mut previous_dir = "UP";
+    let mut fill = false;
 
     loop {
         let mut input_line = String::new();
@@ -40,11 +42,17 @@ fn main() {
             let y0 = parse_input!(inputs[1], i32); // starting Y coordinate of lightcycle (or -1)
             let x1 = parse_input!(inputs[2], i32); // starting X coordinate of lightcycle (can be the same as X0 if you play before this player)
             let y1 = parse_input!(inputs[3], i32); // starting Y coordinate of lightcycle (can be the same as Y0 if you play before this player)
+            eprintln!(
+                "Debug message... player {} \t({}, {}) \t({}, {})",
+                i, x0, y0, x1, y1
+            );
+
             if x0 == -1 {
                 remove_player(n, &mut ground);
             } else {
-                players[i] = (x1 as usize, y1 as usize);
-                ground[x1 as usize][y1 as usize] = i.to_string().chars().next().unwrap();
+                players[i] = (y1 as usize, x1 as usize); // row (y) , col (x)
+                ground[y1 as usize][x1 as usize] = i.to_string().chars().next().unwrap();
+                ground[y0 as usize][x0 as usize] = i.to_string().chars().next().unwrap();
             }
         }
 
@@ -55,7 +63,27 @@ fn main() {
         //     None => (0_usize, 0_usize),
         //     Some(x) => *x,
         // };
-        next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground, true);
+
+        display_ground(&ground);
+
+        if fill {
+            next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground, true);
+        } else {
+            let mut goal: (usize, usize) = (0, 0);
+            let mut goal_char = '0';
+            if p != 0 {
+                goal_char = '1';
+            }
+            goal = get_coordinates(goal_char, &ground).unwrap();
+            next_step = get_path(players[p], goal, &ground);
+            if players[p].0 <= 0 || players[p].0 >= 19 || players[p].1 <= 0 || players[p].1 >= 29 {
+                fill = true;
+            }
+        }
+        eprintln!(
+            "Debug message... {:?} \t -> {:?} ({})",
+            players[p], next_step, fill
+        );
 
         if next_step.0 < players[p].0 {
             previous_dir = "UP";
@@ -177,10 +205,10 @@ fn get_nextstep_fill_rotate(
 
     match (current_dir, dextrogyre) {
         ("LEFT", true) => {
-            coords = vec![(p.0 - 1, p.1), (p.0, p.1 - 1), (p.0 + 1, p.1)];
+            coords = vec![(p.0 + 1, p.1), (p.0, p.1 - 1), (p.0 - 1, p.1)];
         }
         ("LEFT", false) => {
-            coords = vec![(p.0 + 1, p.1), (p.0, p.1 - 1), (p.0 - 1, p.1)];
+            coords = vec![(p.0 - 1, p.1), (p.0, p.1 - 1), (p.0 + 1, p.1)];
         }
         ("UP", true) => {
             coords = vec![(p.0, p.1 - 1), (p.0 - 1, p.1), (p.0, p.1 + 1)];
@@ -189,10 +217,10 @@ fn get_nextstep_fill_rotate(
             coords = vec![(p.0, p.1 + 1), (p.0 - 1, p.1), (p.0, p.1 - 1)];
         }
         ("RIGHT", true) => {
-            coords = vec![(p.0 + 1, p.1), (p.0, p.1 + 1), (p.0 - 1, p.1)];
+            coords = vec![(p.0 - 1, p.1), (p.0, p.1 + 1), (p.0 + 1, p.1)];
         }
         ("RIGHT", false) => {
-            coords = vec![(p.0 - 1, p.1), (p.0, p.1 + 1), (p.0 + 1, p.1)];
+            coords = vec![(p.0 + 1, p.1), (p.0, p.1 + 1), (p.0 - 1, p.1)];
         }
         ("DOWN", true) => {
             coords = vec![(p.0, p.1 + 1), (p.0 + 1, p.1), (p.0, p.1 - 1)];
@@ -209,6 +237,7 @@ fn get_nextstep_fill_rotate(
             ];
         }
     }
+    let first = (coords[0].0, coords[0].1);
 
     for (row, col) in coords {
         if row < 0 || row >= height {
@@ -221,16 +250,20 @@ fn get_nextstep_fill_rotate(
             return (row, col);
         }
     }
-    return coords[0];
+    return first;
 }
 
 /// Quick and dirty A*
 /// Return next hop
-fn get_path(start: (usize, usize), goal: (usize, usize), maze: &Vec<Vec<char>>) -> (usize, usize) {
+fn get_path(
+    start: (usize, usize),
+    goal: (usize, usize),
+    ground: &Vec<Vec<char>>,
+) -> (usize, usize) {
     // let now = time::Instant::now();
     let mut visited = HashMap::new(); // 1st_hop : HeshSet{(uize, usize)}
     let max_cost = 100;
-    let candidate_hop = get_neighbours(start, maze);
+    let candidate_hop = get_neighbours(start, ground);
     if candidate_hop.len() == 1 {
         return candidate_hop[0];
     }
@@ -249,7 +282,7 @@ fn get_path(start: (usize, usize), goal: (usize, usize), maze: &Vec<Vec<char>>) 
             let mut next_neighbours: Vec<(usize, usize)> = Vec::new();
             let reached_copy = reached.clone();
             for r in reached.iter() {
-                for n in get_neighbours(*r, maze).iter() {
+                for n in get_neighbours(*r, ground).iter() {
                     if *n == goal {
                         return *candidate;
                     }
@@ -266,16 +299,22 @@ fn get_path(start: (usize, usize), goal: (usize, usize), maze: &Vec<Vec<char>>) 
     return candidate_hop[0];
 }
 
-fn get_coordinates(c: char, maze: &Vec<Vec<char>>) -> Option<(usize, usize)> {
-    let height = maze.len();
-    let width = maze[0].len();
+fn get_coordinates(c: char, ground: &Vec<Vec<char>>) -> Option<(usize, usize)> {
+    let height = ground.len();
+    let width = ground[0].len();
     let row_range = 0..height;
     let col_range = 0..width;
 
     for (row, col) in iproduct!(row_range, col_range) {
-        if maze[row][col] == c {
+        if ground[row][col] == c {
             return Some((row, col));
         }
     }
     return None;
+}
+
+fn display_ground(ground: &Vec<Vec<char>>) {
+    for row in ground {
+        eprintln!("Debug Message... {}", row.into_iter().collect::<String>());
+    }
 }
