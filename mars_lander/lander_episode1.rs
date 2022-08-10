@@ -11,15 +11,20 @@ macro_rules! parse_input {
  * the standard input according to the problem statement.
  **/
 fn main() {
+    let mut land: Vec<(i32, i32)> = Vec::new();
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let surface_n = parse_input!(input_line, i32); // the number of points used to draw the surface of Mars.
+    let mut set_rotation = 0;
+    let mut set_power = 0;
     for i in 0..surface_n as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.split(" ").collect::<Vec<_>>();
         let land_x = parse_input!(inputs[0], i32); // X coordinate of a surface point. (0 to 6999)
         let land_y = parse_input!(inputs[1], i32); // Y coordinate of a surface point. By linking all the points together in a sequential fashion, you form the surface of Mars.
+        land.push((land_x, land_y));
+        //
     }
 
     // game loop
@@ -39,6 +44,51 @@ fn main() {
         // To debug: eprintln!("Debug message...");
 
         // 2 integers: rotate power. rotate is the desired rotation angle (should be 0 for level 1), power is the desired thrust power (0 to 4).
-        println!("0 3");
+        let remaining_h = y - get_height(x, &land) as i32;
+        eprintln!("Debug message... height {}", remaining_h);
+        let margin = z_margin(v_speed, remaining_h);
+        eprintln!("Debug message... margin {}", margin);
+
+        if margin.abs() > 20.0 {
+            set_power = 0
+        } else if margin.abs() > 15.0 {
+            set_power = 1
+        } else if margin.abs() > 10.0 {
+            set_power = 2
+        } else if margin.abs() > 5.0 {
+            set_power = 3
+        } else {
+            set_power = 4
+        }
+
+        println!("{} {}", set_rotation, set_power);
     }
+}
+
+/// compute margin
+/// if absolute bvalue of margin is greater than 1, then we can let the lander
+/// freefall
+/// if the absolute value of margin is lower than one, the full thrust is required
+/// to avoir crash
+fn z_margin(h_speed: i32, height: i32) -> f64 {
+    let max_thrust = 4.0;
+    let max_a = max_thrust - 3.711;
+    ((height as f64) * max_a) / (2.0 * h_speed as f64)
+}
+
+/// find terrain height at specific x
+fn get_height(x: i32, land: &Vec<(i32, i32)>) -> f64 {
+    let mut previous_h = (0.0, 0.0);
+    let mut next_h = (0.0, 0.0);
+    for point in land {
+        if point.0 == x {
+            return point.1.into();
+        } else if point.0 < x {
+            previous_h = (point.0 as f64, point.1 as f64);
+        } else {
+            next_h = (point.0 as f64, point.1 as f64);
+            break;
+        }
+    }
+    previous_h.1 + (previous_h.1 - next_h.1) * (previous_h.0 - x as f64) / (previous_h.0 - next_h.0)
 }
