@@ -1,3 +1,4 @@
+use std::cmp;
 use std::io;
 
 macro_rules! parse_input {
@@ -66,6 +67,21 @@ fn main() {
         eprintln!("Debug message... h distance {}", landing_site.0 - x);
         let h_margin = x_margin(h_speed, landing_site.0 - x);
         eprintln!("Debug message... h margin {}", h_margin);
+        set_rotation = get_rotation(h_speed, landing_site.0 - x);
+
+        if h_speed.abs() < 20
+            && (landing_site.0 - x).abs() < 500
+            && remaining_h < 10
+            && v_speed.abs() < 30
+        {
+            // landing conditions
+            eprintln!("Debug message... landing");
+            set_rotation = 0;
+        }
+
+        if set_rotation.abs() > 5 {
+            set_power = 4;
+        }
 
         println!("{} {}", set_rotation, set_power);
     }
@@ -83,7 +99,7 @@ fn z_margin(h_speed: i32, height: i32) -> f64 {
 }
 
 fn x_margin(x_speed: i32, dist: i32) -> f64 {
-    let max_a = 2.0;
+    let max_a = 1.0;
     ((dist as f64) * max_a) / (2.0 * x_speed as f64)
 }
 
@@ -115,4 +131,15 @@ fn get_landing_site(land: &Vec<(i32, i32)>) -> (i32, i32) {
         previous = (point.0, point.1);
     }
     previous
+}
+
+fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
+    let k0 = 2;
+    let k1 = 1;
+    let result = -k0 * landing_distance / 100 + k1 * h_speed;
+    eprintln!(
+        "Debug message... speed {} distance {} result {}",
+        h_speed, landing_distance, result
+    );
+    return cmp::max(-90, cmp::min(result, 90));
 }
