@@ -47,8 +47,14 @@ fn main() {
         // To debug: eprintln!("Debug message...");
 
         // 2 integers: rotate power. rotate is the desired rotation angle (should be 0 for level 1), power is the desired thrust power (0 to 4).
-        let remaining_h = y - get_height(x, &land) as i32;
-        eprintln!("Debug message... height {}", remaining_h);
+        let remaining_h = cmp::min(y - get_height(x, &land) as i32, y - landing_site.1);
+
+        eprintln!(
+            "Debug message... height {} ({}, {})",
+            remaining_h,
+            y - get_height(x, &land) as i32,
+            y - landing_site.1
+        );
         let margin = z_margin(v_speed, remaining_h);
         eprintln!("Debug message... margin {}", margin);
 
@@ -71,7 +77,7 @@ fn main() {
 
         if h_speed.abs() < 20
             && (landing_site.0 - x).abs() < 500
-            && remaining_h < 10
+            && remaining_h < 20
             && v_speed.abs() < 30
         {
             // landing conditions
@@ -82,6 +88,12 @@ fn main() {
         if set_rotation.abs() > 5 {
             set_power = 4;
         }
+        if margin.abs() < 5.0 {
+            eprintln!("Debug message... height warning");
+            set_rotation = set_rotation / 2;
+        }
+
+        set_rotation = cmp::max(-30, cmp::min(set_rotation, 30));
 
         println!("{} {}", set_rotation, set_power);
     }
