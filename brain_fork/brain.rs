@@ -23,15 +23,17 @@ fn main() {
     let magic_phrase = input_line.trim_matches('\n').to_string();
     let letters: Vec<char> = magic_phrase.chars().collect(); // wanted output
     let mut rune = 'A';
-    let mut forest: Vec<char> = Vec::new(); // current status
+    let mut forest = [' '; 30];
     let mut output_letter = "".to_string();
 
     // Write an action using println!("message...");
     // To debug: eprintln!("Debug message...");
     for position in 0..letters.len() {
+        let idx = position % forest.len();
         output_letter += ">";
-        let init_value = ' ';
+        let init_value = forest[idx];
         output_letter += &get_letter(letters[position], &init_value);
+        forest[idx] = letters[position];
         output_letter += ".";
     }
 
