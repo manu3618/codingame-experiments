@@ -36,26 +36,37 @@ fn main() {
         forest[idx] = letters[position];
         output_letter += ".";
     }
-
+    eprintln!("output length {}", output_letter.len());
     println!("{}", output_letter);
 }
 
 /// Get part of string needed to obtain the new letter
 /// run is modified in place
 fn get_letter(wanted_letter: char, rune: &char) -> String {
-    eprintln!("{}", *rune);
     let rune_pos = VALUES.iter().position(|&x| x == *rune).unwrap();
     let wanted_pos = VALUES.iter().position(|&x| x == wanted_letter).unwrap();
-
-    if rune_pos > wanted_pos {
-        let diff = rune_pos - wanted_pos;
-        return "-".repeat(diff as usize);
+    let dist = get_letter_dist(wanted_letter, *rune);
+    if dist < 0 {
+        return "-".repeat(dist.abs() as usize);
     } else {
-        let diff = wanted_pos - rune_pos;
-        return "+".repeat(diff as usize);
+        return "+".repeat(dist as usize);
     }
 }
 
+/// Get minimal number of action to change current rune.
+fn get_letter_dist(wanted_letter: char, rune: char) -> i32 {
+    let rune_pos = VALUES.iter().position(|&x| x == rune).unwrap();
+    let wanted_pos = VALUES.iter().position(|&x| x == wanted_letter).unwrap();
+    let total_len = VALUES.len() as i32;
+    let forward_dist = (total_len + wanted_pos as i32 - rune_pos as i32) % total_len;
+    let backward_dist = (total_len + rune_pos as i32 - wanted_pos as i32) % total_len;
+    if backward_dist < forward_dist {
+        let backward_dist = -backward_dist;
+        return backward_dist;
+    } else {
+        return forward_dist;
+    }
+}
 fn get_status(forest: &Vec<char>, position: &usize) {
     let s: String = forest.iter().collect();
     eprintln!("{}", s);
