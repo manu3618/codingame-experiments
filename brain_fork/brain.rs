@@ -97,7 +97,7 @@ fn get_minimal_rune_idx(wanted_letter: char, forest: &[char], cur_idx: usize) ->
     let forest_len = forest.len();
     for idx in 0..forest_len {
         idx_dist = get_mod_dist(cur_idx as i32, idx as i32, forest_len as i32).abs();
-        letter_dist = get_letter_dist(wanted_letter, forest[idx]);
+        letter_dist = get_letter_dist(wanted_letter, forest[idx]).abs();
         if (idx_dist + letter_dist) < min_op {
             min_op = idx_dist + letter_dist;
             min_idx = idx;
