@@ -1,18 +1,13 @@
-# https://www.codingame.com/ide/puzzle/don't-panic
-(_, _, _, exit_f, exit_p, _, _, nb_e) = [int(i) for i in input().split()]
-
-e = {exit_f: exit_p}
-for i in range(nb_e):
-    e_f, e_p = [int(j) for j in input().split()]
-    e[e_f] = e_p
-
-while True:
-    i = input().split()
-    c_f = int(i[0])
-    c_p = int(i[1])
-    d = i[2]
-
-    if (d == "LEFT" and e[c_f] > c_p) or (d == "RIGHT" and e[c_f] < c_p):
+_,_,_,f,p,_,_,b=[int(i) for i in input().split()]
+e={f:p}
+for i in range(b):
+    f,p=[int(j) for j in input().split()]
+    e[f]=p
+while 1:
+    f,p,d=input().split()
+    f=int(f)
+    p=int(p)
+    if (d=="LEFT" and e[f]>p)or(d=="RIGHT" and e[f]<p):
         print("BLOCK")
     else:
         print("WAIT")
