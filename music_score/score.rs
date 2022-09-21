@@ -63,11 +63,88 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
 fn split_image(image: Vec<Vec<char>>) -> Vec<Vec<Vec<char>>> {
     /// split image in individual notes
     // TODO
-    return [image];
+    return vec![image];
 }
 
-fn recognize_note(image: Vec<Vec<char>>) -> str {
+fn recognize_note(image: Vec<Vec<char>>) -> String {
     /// analyze single note
     // TODO
-    return "AQ";
+    return "AQ".to_string();
+}
+
+fn classify_rows(image: Vec<Vec<char>>) -> Vec<String> {
+    let mut classes: Vec<String> = Vec::new();
+    for col in 0..image[0].len() {
+        let mut row: Vec<char> = (0..image.len()).map(|x| image[x][col]).collect();
+        classes.push(classify_row(row));
+    }
+    return classes;
+}
+
+fn classify_row(row: Vec<char>) -> String {
+    /// indicate row of the class
+    if row.iter().all(|&x| x == 'W') {
+        return "blank".to_string();
+    }
+    match detect_lines(row) {
+        None => return "note".to_string(),
+        Some(x) => return "interlines".to_string(),
+    }
+}
+fn detect_lines(row: Vec<char>) -> Option<Vec<usize>> {
+    /// Given a row, return the first row of each interline
+    /// Return None if unable to detet lines
+    let mut blacks: Vec<usize> = Vec::new();
+    for idx in 0..row.len() {
+        if row[idx] == 'B' {
+            blacks.push(idx)
+        }
+    }
+    let mut line_width = 0_usize;
+    for w in 0..row.len() {
+        if row[blacks[0] + w] == 'W' {
+            line_width = w;
+            break;
+        }
+    }
+    let mut interline = 0_usize;
+    for idx in (blacks[0] + line_width)..row.len() {
+        if row[idx] == 'B' {
+            if idx - (blacks[0] + line_width) < 8 {
+                // not enougn interline
+                return None;
+            }
+            if idx - (blacks[0] + line_width) < (4 * line_width) {
+                // not enougn interline
+                return None;
+            }
+            interline = idx - blacks[0];
+            break;
+        }
+    }
+    let mut line_start: Vec<usize> = (0..5).map(|x| blacks[0] + x * interline).collect();
+    let mut lines: Vec<usize> = Vec::new(); // ines ithat must be black
+    for w in 1..line_width {
+        // lines.append(line_start.map(|x| x + w))
+        for elt in line_start.iter() {
+            lines.push(elt + w)
+        }
+    }
+    // if lines.any(|x| x == 'W') {
+    //     return None;
+    // }
+    for &x in &lines {
+        if row[x] == 'B' {
+            return None;
+        }
+    }
+    for idx in 0..(lines[lines.len()] + interline) {
+        if lines.contains(&idx) {
+            continue;
+        }
+        if row[idx] == 'B' {
+            return None;
+        }
+    }
+    return Some(line_start);
 }
