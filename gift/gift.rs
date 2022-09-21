@@ -24,6 +24,7 @@ fn main() {
         let b = parse_input!(input_line, i32);
         budgets.push(b)
     }
+    eprintln!("Debug message... budgets {:?}", &budgets);
     match balance_split(&mut budgets, c) {
         None => {
             println!("IMPOSSIBLE");
@@ -38,21 +39,27 @@ fn main() {
 }
 
 fn balance_split(budgets: &mut Vec<i32>, total: i32) -> Option<Vec<i32>> {
-    if (&mut budgets).iter().sum::<i32>() < total {
+    if budgets.iter().sum::<i32>() < total {
         return None;
     }
+    let pilipu_nb = budgets.len();
     let mut share: Vec<i32> = Vec::new();
-    let pilipu_nb = (&mut budgets).len();
+    for _ in 0..pilipu_nb {
+        share.push(0);
+    }
     let mut idx = 0;
-    for _ in 0..total {
+    for _ in 0..total + 1 {
+        // eprintln!("Debug message... budgets {:?}", &budgets);
+        // eprintln!("Debug message... share   {:?}", &mut share);
         if (&mut share).iter().sum::<i32>() == total {
             return Some(share);
         }
-        while (&mut budgets)[idx] == 0 {
+        while budgets[idx] == 0 {
             idx = (idx + 1) % pilipu_nb;
         }
         share[idx] = share[idx] + 1;
         budgets[idx] = budgets[idx] - 1;
+        idx = (idx + 1) % pilipu_nb;
     }
     return None;
 }
