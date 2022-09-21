@@ -14,53 +14,60 @@ macro_rules! parse_input {
 fn main() {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
-    let n = parse_input!(input_line, i32); // pilipiu number
+    let inputs = input_line.split(" ").collect::<Vec<_>>();
+    let w = parse_input!(inputs[0], i32);
+    let h = parse_input!(inputs[1], i32);
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
-    let c = parse_input!(input_line, i32); // gift price
-    let mut budgets: Vec<i32> = Vec::new();
-    for i in 0..n as usize {
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let b = parse_input!(input_line, i32);
-        budgets.push(b)
-    }
-    eprintln!("Debug message... budgets {:?}", &budgets);
-    match balance_split(&mut budgets, c) {
-        None => {
-            println!("IMPOSSIBLE");
+    let image = input_line.trim_matches('\n').to_string();
+
+    // Write an answer using println!("message...");
+    // To debug: eprintln!("Debug message...");
+    uncompress(image, w as usize, h as usize);
+
+    println!("AQ DH");
+}
+
+fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>> {
+    /// Transform description in bitmap image
+    let mut image = vec![vec![' '; width as usize]; height as usize];
+    let mut cur_row = 0_usize;
+    let mut cur_col = 0_usize;
+    let mut length: usize;
+    let mut fill_char = ' ';
+    for c in description.split_whitespace() {
+        if c.trim() == "W" {
+            fill_char = 'W';
+            eprintln!("{}\t {}\t {}", cur_row, cur_col, fill_char);
+            continue;
         }
-        Some(mut share) => {
-            share.sort();
-            for elt in share {
-                println!("{}", elt);
+        if c.trim() == "B" {
+            fill_char = 'B';
+            eprintln!("{}\t {}\t {}", cur_row, cur_col, fill_char);
+            continue;
+        }
+        length = c.trim().parse().unwrap();
+        for _ in 0..length {
+            image[cur_row][cur_col] = fill_char;
+            cur_col = cur_col + 1;
+            if cur_col == width {
+                // eprintln!("{}\t{}", cur_row, image[cur_row].iter().collect::<String>());
+                cur_col = 0;
+                cur_row = cur_row + 1;
             }
         }
     }
+    return image;
 }
 
-fn balance_split(budgets: &mut Vec<i32>, total: i32) -> Option<Vec<i32>> {
-    if budgets.iter().sum::<i32>() < total {
-        return None;
-    }
-    let pilipu_nb = budgets.len();
-    let mut share: Vec<i32> = Vec::new();
-    for _ in 0..pilipu_nb {
-        share.push(0);
-    }
-    let mut idx = 0;
-    for _ in 0..total + 1 {
-        // eprintln!("Debug message... budgets {:?}", &budgets);
-        // eprintln!("Debug message... share   {:?}", &mut share);
-        if (&mut share).iter().sum::<i32>() == total {
-            return Some(share);
-        }
-        while budgets[idx] == 0 {
-            idx = (idx + 1) % pilipu_nb;
-        }
-        share[idx] = share[idx] + 1;
-        budgets[idx] = budgets[idx] - 1;
-        idx = (idx + 1) % pilipu_nb;
-    }
-    return None;
+fn split_image(image: Vec<Vec<char>>) -> Vec<Vec<Vec<char>>> {
+    /// split image in individual notes
+    // TODO
+    return [image];
+}
+
+fn recognize_note(image: Vec<Vec<char>>) -> str {
+    /// analyze single note
+    // TODO
+    return "AQ";
 }
