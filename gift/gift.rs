@@ -1,3 +1,4 @@
+// https://www.codingame.com/ide/puzzle/the-gift
 use std::io;
 
 macro_rules! parse_input {
