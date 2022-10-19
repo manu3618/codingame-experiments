@@ -23,7 +23,10 @@ fn main() {
 
     // Write an answer using println!("message...");
     // To debug: eprintln!("Debug message...");
-    uncompress(image, w as usize, h as usize);
+    let bitmap = uncompress(image, w as usize, h as usize);
+    let classes = classify_rows(bitmap);
+    eprintln!("{:?}", classes);
+    eprintln!("{:?}", classes.len());
 
     println!("AQ DH");
 }
@@ -38,12 +41,10 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
     for c in description.split_whitespace() {
         if c.trim() == "W" {
             fill_char = 'W';
-            eprintln!("{}\t {}\t {}", cur_row, cur_col, fill_char);
             continue;
         }
         if c.trim() == "B" {
             fill_char = 'B';
-            eprintln!("{}\t {}\t {}", cur_row, cur_col, fill_char);
             continue;
         }
         length = c.trim().parse().unwrap();
@@ -51,7 +52,6 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
             image[cur_row][cur_col] = fill_char;
             cur_col = cur_col + 1;
             if cur_col == width {
-                // eprintln!("{}\t{}", cur_row, image[cur_row].iter().collect::<String>());
                 cur_col = 0;
                 cur_row = cur_row + 1;
             }
@@ -76,19 +76,21 @@ fn classify_rows(image: Vec<Vec<char>>) -> Vec<String> {
     let mut classes: Vec<String> = Vec::new();
     for col in 0..image[0].len() {
         let mut row: Vec<char> = (0..image.len()).map(|x| image[x][col]).collect();
+        // eprintln!("{:?}", &row);
         classes.push(classify_row(row));
+        // eprintln!("{:?}", classes);
     }
     return classes;
 }
 
 fn classify_row(row: Vec<char>) -> String {
-    /// indicate row of the class
+    /// indicate type of row (either lines, note, or other)
     if row.iter().all(|&x| x == 'W') {
-        return "blank".to_string();
+        return "b".to_string(); // blank
     }
     match detect_lines(row) {
-        None => return "note".to_string(),
-        Some(x) => return "interlines".to_string(),
+        None => return "n".to_string(),    // note
+        Some(x) => return "i".to_string(), // interlines
     }
 }
 fn detect_lines(row: Vec<char>) -> Option<Vec<usize>> {
@@ -123,22 +125,18 @@ fn detect_lines(row: Vec<char>) -> Option<Vec<usize>> {
         }
     }
     let mut line_start: Vec<usize> = (0..5).map(|x| blacks[0] + x * interline).collect();
-    let mut lines: Vec<usize> = Vec::new(); // ines ithat must be black
-    for w in 1..line_width {
-        // lines.append(line_start.map(|x| x + w))
+    let mut lines: Vec<usize> = Vec::new(); // lines that must be black
+    for w in 0..line_width {
         for elt in line_start.iter() {
             lines.push(elt + w)
         }
     }
-    // if lines.any(|x| x == 'W') {
-    //     return None;
-    // }
     for &x in &lines {
-        if row[x] == 'B' {
+        if row[x] == 'W' {
             return None;
         }
     }
-    for idx in 0..(lines[lines.len()] + interline) {
+    for idx in 0..(lines.iter().max().copied().unwrap() + interline) {
         if lines.contains(&idx) {
             continue;
         }
