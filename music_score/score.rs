@@ -1,4 +1,5 @@
 // https://www.codingame.com/ide/puzzle/music-scores
+use std::collections::HashSet;
 use std::io;
 
 macro_rules! parse_input {
@@ -117,14 +118,74 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
     if end - start <= 2 {
         return "".to_string();
     }
-    // XXX
     let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
-    let lines = detect_lines(row).unwrap();
-    let col = (end - start) / 4;
-    row = (0..image.len()).map(|x| image[x][col]).collect();
-    eprintln!("{:?}", col);
+    let mut line_start = detect_lines(&row).unwrap();
+    line_start.insert(0, 0);
+    line_start.push(row.len());
+    let mut lines: Vec<usize> = Vec::new();
+    for idx in 0..row.len() {
+        if row[idx] == 'B' {
+            lines.push(idx)
+        }
+    }
 
-    return "AQ".to_string();
+    let col = start + (end - start) / 4;
+    row = (0..image.len()).map(|x| image[x][col]).collect();
+    // eprintln!("column: {:?}", col);
+    // eprintln!("line_start: {:?}", line_start);
+    // eprintln!("lines:      {:?}", lines);
+
+    let mut anorm: Vec<usize> = Vec::new();
+    for idx in 0..row.len() {
+        if (lines.contains(&idx) && row[idx] == 'W') || (!lines.contains(&idx) && row[idx] == 'B') {
+            anorm.push(idx)
+        }
+    }
+    // eprintln!("anomalies : {:?}", anorm);
+    // XXX
+
+    let mut anom_pos: HashSet<usize> = HashSet::new();
+    for ano in anorm {
+        for idx in 0..(line_start.len() - 1) {
+            if ano > line_start[idx] && ano < line_start[idx + 1] {
+                anom_pos.insert(idx);
+            }
+        }
+    }
+    eprintln!("anomalies positions: {:?}", anom_pos);
+
+    let mut result = "".to_string();
+    result.push_str(&get_letter(&anom_pos));
+    result.push_str(&get_color(&anom_pos, &line_start, &row));
+
+    return result;
+}
+
+fn get_letter(anomalies_pos: &HashSet<usize>) -> String {
+    // eprintln!("anomalies positions: {:?}", &anomalies_pos);
+    if anomalies_pos.len() == 1 {
+        eprintln!("1: {:?}", &anomalies_pos);
+        match anomalies_pos.iter().min().unwrap() {
+            0 => return "Z".to_string(),
+            1 => return "E".to_string(),
+            2 => return "C".to_string(),
+            3 => return "A".to_string(),
+            _ => return "Z".to_string(),
+        }
+    } else {
+        eprintln!("else: {:?}", &anomalies_pos);
+        match anomalies_pos.iter().min().unwrap() {
+            0 => return "Z".to_string(),
+            1 => return "D".to_string(),
+            2 => return "B".to_string(),
+            3 => return "Z".to_string(),
+            _ => return "Z".to_string(),
+        }
+    }
+}
+
+fn get_color(anomalies_pos: &HashSet<usize>, line_start: &Vec<usize>, row: &Vec<char>) -> String {
+    return "Q".to_string();
 }
 
 fn classify_rows(image: Vec<Vec<char>>) -> Vec<char> {
@@ -141,13 +202,13 @@ fn classify_row(row: Vec<char>) -> char {
     if row.iter().all(|&x| x == 'W') {
         return 'b'; // blank
     }
-    match detect_lines(row) {
+    match detect_lines(&row) {
         None => return 'n',    // note
         Some(x) => return 'i', // interlines
     }
 }
 
-fn detect_lines(row: Vec<char>) -> Option<Vec<usize>> {
+fn detect_lines(row: &Vec<char>) -> Option<Vec<usize>> {
     /// Given a row, return the first row of each interline
     /// Return None if unable to detet lines
     let mut blacks: Vec<usize> = Vec::new();
