@@ -24,15 +24,15 @@ fn main() {
     // Write an answer using println!("message...");
     // To debug: eprintln!("Debug message...");
     let bitmap = uncompress(image, w as usize, h as usize);
-    let classes = classify_rows(bitmap);
-    eprintln!("{:?}", classes);
-    eprintln!("{:?}", classes.len());
+    let indexes = get_note_index_image(&bitmap);
+    eprintln!("{:?}", indexes);
+    eprintln!("{:?}", indexes.len());
 
-    println!("AQ DH");
+    println!("{}", recognize_notes(&bitmap, &indexes));
 }
 
+/// Transform description in bitmap image
 fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>> {
-    /// Transform description in bitmap image
     let mut image = vec![vec![' '; width as usize]; height as usize];
     let mut cur_row = 0_usize;
     let mut cur_col = 0_usize;
@@ -60,39 +60,93 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
     return image;
 }
 
-fn split_image(image: Vec<Vec<char>>) -> Vec<Vec<Vec<char>>> {
-    /// split image in individual notes
-    // TODO
-    return vec![image];
+/// get starting and
+fn get_note_index_image(image: &Vec<Vec<char>>) -> Vec<Vec<usize>> {
+    let classes = classify_rows(image.clone());
+    let mut notes: Vec<Vec<usize>> = Vec::new();
+
+    let mut idx = 0_usize;
+    let mut start = 0_usize;
+    let mut end = 0_usize;
+
+    while idx < image[0].len() {
+        start = find_next_start(&classes, idx);
+        end = find_next_end(&classes, start);
+        idx = end;
+        notes.push(vec![start, end]);
+    }
+    return notes;
 }
 
-fn recognize_note(image: Vec<Vec<char>>) -> String {
-    /// analyze single note
-    // TODO
+/// return index of next interline just before note
+fn find_next_start(classes: &Vec<char>, start: usize) -> usize {
+    for idx in start..(classes.len() - 1) {
+        if classes[idx] == 'i' && classes[idx + 1] == 'n' {
+            return idx;
+        }
+    }
+    return classes.len();
+}
+
+/// return index of next interline just after note
+fn find_next_end(classes: &Vec<char>, start: usize) -> usize {
+    for idx in start..classes.len() {
+        if classes[idx - 1] == 'n' && classes[idx] == 'i' {
+            return idx;
+        }
+    }
+    return classes.len();
+}
+
+fn recognize_notes(image: &Vec<Vec<char>>, notes: &Vec<Vec<usize>>) -> String {
+    let mut result = "".to_string();
+    for note in notes {
+        let rec = recognize_note(image, note[0], note[1]);
+        if rec.len() > 1 {
+            result.push_str(" ");
+            result.push_str(&rec);
+        }
+    }
+    result.remove(0); // remove leading space
+    return result;
+}
+
+/// analyze single note
+/// the image start at start and ends at end
+fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
+    if end - start <= 2 {
+        return "".to_string();
+    }
+    // XXX
+    let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
+    let lines = detect_lines(row).unwrap();
+    let col = (end - start) / 4;
+    row = (0..image.len()).map(|x| image[x][col]).collect();
+    eprintln!("{:?}", col);
+
     return "AQ".to_string();
 }
 
-fn classify_rows(image: Vec<Vec<char>>) -> Vec<String> {
-    let mut classes: Vec<String> = Vec::new();
+fn classify_rows(image: Vec<Vec<char>>) -> Vec<char> {
+    let mut classes: Vec<char> = Vec::new();
     for col in 0..image[0].len() {
         let mut row: Vec<char> = (0..image.len()).map(|x| image[x][col]).collect();
-        // eprintln!("{:?}", &row);
         classes.push(classify_row(row));
-        // eprintln!("{:?}", classes);
     }
     return classes;
 }
 
-fn classify_row(row: Vec<char>) -> String {
+fn classify_row(row: Vec<char>) -> char {
     /// indicate type of row (either lines, note, or other)
     if row.iter().all(|&x| x == 'W') {
-        return "b".to_string(); // blank
+        return 'b'; // blank
     }
     match detect_lines(row) {
-        None => return "n".to_string(),    // note
-        Some(x) => return "i".to_string(), // interlines
+        None => return 'n',    // note
+        Some(x) => return 'i', // interlines
     }
 }
+
 fn detect_lines(row: Vec<char>) -> Option<Vec<usize>> {
     /// Given a row, return the first row of each interline
     /// Return None if unable to detet lines
