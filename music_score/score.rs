@@ -26,8 +26,6 @@ fn main() {
     // To debug: eprintln!("Debug message...");
     let bitmap = uncompress(image, w as usize, h as usize);
     let indexes = get_note_index_image(&bitmap);
-    eprintln!("{:?}", indexes);
-    eprintln!("{:?}", indexes.len());
 
     println!("{}", recognize_notes(&bitmap, &indexes));
 }
@@ -118,8 +116,10 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
     if end - start <= 2 {
         return "".to_string();
     }
-    let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
+    // let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
+    let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start - 1]).collect();
     let mut line_start = detect_lines(&row).unwrap();
+    line_start.push(line_start[4] + (line_start[4] - line_start[3])); // last optinal interline
     line_start.insert(0, 0);
     line_start.push(row.len());
     let mut lines: Vec<usize> = Vec::new();
@@ -129,11 +129,8 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
         }
     }
 
-    let col = start + (end - start) / 4;
+    let mut col = start + (end - start) / 4;
     row = (0..image.len()).map(|x| image[x][col]).collect();
-    // eprintln!("column: {:?}", col);
-    // eprintln!("line_start: {:?}", line_start);
-    // eprintln!("lines:      {:?}", lines);
 
     let mut anorm: Vec<usize> = Vec::new();
     for idx in 0..row.len() {
@@ -141,8 +138,6 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
             anorm.push(idx)
         }
     }
-    // eprintln!("anomalies : {:?}", anorm);
-    // XXX
 
     let mut anom_pos: HashSet<usize> = HashSet::new();
     for ano in anorm {
@@ -155,37 +150,73 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
     eprintln!("anomalies positions: {:?}", anom_pos);
 
     let mut result = "".to_string();
-    result.push_str(&get_letter(&anom_pos));
+    result.push_str(&get_letter(&anom_pos)); // XXX
+
+    let mut col = start + (end - start) / 2;
+    row = (0..image.len()).map(|x| image[x][col]).collect();
+
     result.push_str(&get_color(&anom_pos, &line_start, &row));
+    // std::process::exit(0); // XXX
+    eprintln!(
+        "{}{}",
+        get_letter(&anom_pos),
+        get_color(&anom_pos, &line_start, &row)
+    );
 
     return result;
 }
 
 fn get_letter(anomalies_pos: &HashSet<usize>) -> String {
-    // eprintln!("anomalies positions: {:?}", &anomalies_pos);
     if anomalies_pos.len() == 1 {
-        eprintln!("1: {:?}", &anomalies_pos);
         match anomalies_pos.iter().min().unwrap() {
-            0 => return "Z".to_string(),
+            0 => return "G".to_string(),
             1 => return "E".to_string(),
             2 => return "C".to_string(),
             3 => return "A".to_string(),
-            _ => return "Z".to_string(),
+            4 => return "F".to_string(),
+            5 => return "D".to_string(),
+            _ => return ".".to_string(),
         }
     } else {
-        eprintln!("else: {:?}", &anomalies_pos);
         match anomalies_pos.iter().min().unwrap() {
-            0 => return "Z".to_string(),
+            0 => return "F".to_string(),
             1 => return "D".to_string(),
             2 => return "B".to_string(),
-            3 => return "Z".to_string(),
-            _ => return "Z".to_string(),
+            3 => return "G".to_string(),
+            4 => return "E".to_string(),
+            5 => return "C".to_string(),
+            _ => return ".".to_string(),
         }
     }
 }
 
 fn get_color(anomalies_pos: &HashSet<usize>, line_start: &Vec<usize>, row: &Vec<char>) -> String {
-    return "Q".to_string();
+    let inter_line_len = (line_start[2] - line_start[1]) / 2;
+    let mid_note: usize;
+    if anomalies_pos.len() == 1 {
+        let mid_note_pos = anomalies_pos.iter().next().unwrap();
+        mid_note = line_start[*mid_note_pos] + inter_line_len;
+    } else {
+        let mid_note_pos = anomalies_pos.iter().max().unwrap();
+        mid_note = line_start[*mid_note_pos]
+    }
+    // {
+    //     for idx in 0..row.len() {
+    //         let mut mark = "".to_string();
+    //         if line_start.contains(&idx) {
+    //             mark = "i".to_string();
+    //         }
+    //         if idx == mid_note {
+    //             mark.push_str("<-");
+    //         }
+    //         eprintln!("DEBUG 280 {}\t{} {}", idx, row[idx], mark);
+    //     }
+    // }
+    match row[mid_note] {
+        'B' => return "Q".to_string(),
+        'W' => return "H".to_string(),
+        _ => return ".".to_string(),
+    }
 }
 
 fn classify_rows(image: Vec<Vec<char>>) -> Vec<char> {
