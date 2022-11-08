@@ -193,7 +193,9 @@ fn get_letter(anomalies_pos: &HashSet<usize>) -> String {
 fn get_color(anomalies_pos: &HashSet<usize>, line_start: &Vec<usize>, row: &Vec<char>) -> String {
     let inter_line_len = (line_start[2] - line_start[1]) / 2;
     let mid_note: usize;
-    if anomalies_pos.len() == 1 {
+    if anomalies_pos.len() == 1 && *(anomalies_pos.iter().next().unwrap()) == 0 {
+        mid_note = line_start[1] - inter_line_len;
+    } else if anomalies_pos.len() == 1 {
         let mid_note_pos = anomalies_pos.iter().next().unwrap();
         mid_note = line_start[*mid_note_pos] + inter_line_len;
     } else {
