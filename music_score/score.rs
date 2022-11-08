@@ -62,6 +62,7 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
 /// get starting and
 fn get_note_index_image(image: &Vec<Vec<char>>) -> Vec<Vec<usize>> {
     let classes = classify_rows(image.clone());
+    eprintln!("classes {:?}", classes.iter().collect::<String>());
     let mut notes: Vec<Vec<usize>> = Vec::new();
 
     let mut idx = 0_usize;
@@ -70,9 +71,9 @@ fn get_note_index_image(image: &Vec<Vec<char>>) -> Vec<Vec<usize>> {
 
     while idx < image[0].len() {
         start = find_next_start(&classes, idx);
-        end = find_next_end(&classes, start);
-        idx = end;
+        end = find_next_end(&classes, start + 1);
         notes.push(vec![start, end]);
+        idx = end;
     }
     return notes;
 }
@@ -90,7 +91,7 @@ fn find_next_start(classes: &Vec<char>, start: usize) -> usize {
 /// return index of next interline just after note
 fn find_next_end(classes: &Vec<char>, start: usize) -> usize {
     for idx in start..classes.len() {
-        if classes[idx - 1] == 'n' && classes[idx] == 'i' {
+        if classes[idx - 1] == 'n' && (['i', 'b'].contains(&classes[idx])) {
             return idx;
         }
     }
@@ -116,8 +117,7 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
     if end - start <= 2 {
         return "".to_string();
     }
-    // let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
-    let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start - 1]).collect();
+    let mut row: Vec<char> = (0..image.len()).map(|x| image[x][start]).collect();
     let mut line_start = detect_lines(&row).unwrap();
     line_start.push(line_start[4] + (line_start[4] - line_start[3])); // last optinal interline
     line_start.insert(0, 0);
