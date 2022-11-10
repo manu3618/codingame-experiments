@@ -1,5 +1,6 @@
 // https://www.codingame.com/ide/puzzle/music-scores
 use std::collections::HashSet;
+use std::fs;
 use std::io;
 
 macro_rules! parse_input {
@@ -22,9 +23,13 @@ fn main() {
     io::stdin().read_line(&mut input_line).unwrap();
     let image = input_line.trim_matches('\n').to_string();
 
-    // Write an answer using println!("message...");
-    // To debug: eprintln!("Debug message...");
     let bitmap = uncompress(image, w as usize, h as usize);
+    let content = bitmap
+        .iter()
+        .map(|x| x.iter().collect::<String>())
+        .collect::<Vec<String>>()
+        .join("\n");
+    fs::write("/tmp/notes.txt", content).expect("Unable to write");
     let indexes = get_note_index_image(&bitmap);
 
     println!("{}", recognize_notes(&bitmap, &indexes));
@@ -62,13 +67,11 @@ fn uncompress(description: String, width: usize, height: usize) -> Vec<Vec<char>
 /// get starting and
 fn get_note_index_image(image: &Vec<Vec<char>>) -> Vec<Vec<usize>> {
     let classes = classify_rows(image.clone());
-    eprintln!("classes {:?}", classes.iter().collect::<String>());
     let mut notes: Vec<Vec<usize>> = Vec::new();
 
     let mut idx = 0_usize;
-    let mut start = 0_usize;
-    let mut end = 0_usize;
-
+    let mut start: usize;
+    let mut end: usize;
     while idx < image[0].len() {
         start = find_next_start(&classes, idx);
         end = find_next_end(&classes, start + 1);
@@ -134,11 +137,23 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
 
     let mut anorm: Vec<usize> = Vec::new();
     for idx in 0..row.len() {
-        if (lines.contains(&idx) && row[idx] == 'W') || (!lines.contains(&idx) && row[idx] == 'B') {
+        // if (lines.contains(&idx) && row[idx] == 'W') || (!lines.contains(&idx) && row[idx] == 'B') {
+        if !lines.contains(&idx) && row[idx] == 'B' {
             anorm.push(idx)
         }
     }
-
+    // {
+    //     for idx in 0..row.len() {
+    //         let mut mark = "".to_string();
+    //         if line_start.contains(&idx) {
+    //             mark = "i".to_string();
+    //         }
+    //         if anorm.contains(&idx) {
+    //             mark.push_str("<-");
+    //         }
+    //         eprintln!("DEBUG 160 {}\t{} {}", idx, row[idx], mark);
+    //     }
+    // }
     let mut anom_pos: HashSet<usize> = HashSet::new();
     for ano in anorm {
         for idx in 0..(line_start.len() - 1) {
@@ -147,22 +162,14 @@ fn recognize_note(image: &Vec<Vec<char>>, start: usize, end: usize) -> String {
             }
         }
     }
-    eprintln!("anomalies positions: {:?}", anom_pos);
 
     let mut result = "".to_string();
-    result.push_str(&get_letter(&anom_pos)); // XXX
+    result.push_str(&get_letter(&anom_pos));
 
-    let mut col = start + (end - start) / 2;
+    col = start + (end - start) / 2;
     row = (0..image.len()).map(|x| image[x][col]).collect();
 
     result.push_str(&get_color(&anom_pos, &line_start, &row));
-    // std::process::exit(0); // XXX
-    eprintln!(
-        "{}{}",
-        get_letter(&anom_pos),
-        get_color(&anom_pos, &line_start, &row)
-    );
-
     return result;
 }
 
@@ -223,27 +230,28 @@ fn get_color(anomalies_pos: &HashSet<usize>, line_start: &Vec<usize>, row: &Vec<
 
 fn classify_rows(image: Vec<Vec<char>>) -> Vec<char> {
     let mut classes: Vec<char> = Vec::new();
+    let mut row: Vec<char>;
     for col in 0..image[0].len() {
-        let mut row: Vec<char> = (0..image.len()).map(|x| image[x][col]).collect();
+        row = (0..image.len()).map(|x| image[x][col]).collect();
         classes.push(classify_row(row));
     }
     return classes;
 }
 
+/// indicate type of row (either lines, note, or other)
 fn classify_row(row: Vec<char>) -> char {
-    /// indicate type of row (either lines, note, or other)
     if row.iter().all(|&x| x == 'W') {
         return 'b'; // blank
     }
     match detect_lines(&row) {
-        None => return 'n',    // note
-        Some(x) => return 'i', // interlines
+        None => return 'n',     // note
+        Some(_x) => return 'i', // interlines
     }
 }
 
+/// Given a row, return the first row of each interline
+/// Return None if unable to detet lines
 fn detect_lines(row: &Vec<char>) -> Option<Vec<usize>> {
-    /// Given a row, return the first row of each interline
-    /// Return None if unable to detet lines
     let mut blacks: Vec<usize> = Vec::new();
     for idx in 0..row.len() {
         if row[idx] == 'B' {
@@ -272,7 +280,7 @@ fn detect_lines(row: &Vec<char>) -> Option<Vec<usize>> {
             break;
         }
     }
-    let mut line_start: Vec<usize> = (0..5).map(|x| blacks[0] + x * interline).collect();
+    let line_start: Vec<usize> = (0..5).map(|x| blacks[0] + x * interline).collect();
     let mut lines: Vec<usize> = Vec::new(); // lines that must be black
     for w in 0..line_width {
         for elt in line_start.iter() {
@@ -281,14 +289,16 @@ fn detect_lines(row: &Vec<char>) -> Option<Vec<usize>> {
     }
     for &x in &lines {
         if row[x] == 'W' {
+            // this pixel should be a line (black)
             return None;
         }
     }
-    for idx in 0..(lines.iter().max().copied().unwrap() + interline) {
+    for idx in 0..(lines.iter().max().copied().unwrap() + interline - line_width - 1) {
         if lines.contains(&idx) {
             continue;
         }
         if row[idx] == 'B' {
+            // this pixel should be a space (white)
             return None;
         }
     }
