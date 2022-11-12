@@ -39,10 +39,17 @@ fn main() {
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
 
-        let (row, col) = get_max_effect(&map, bombs);
-        update_map(&mut map, row, col);
-        println!("{} {}", col, row);
-        eprintln!("DEBUG place bomb {} {}", col, row);
+        let (row, col, count) = get_max_effect_all(&map, bombs, false);
+        let wait_count = evaluate_wait(&map, bombs);
+        eprintln!("DEBUG 0440 wait {} {}", wait_count, count);
+        if wait_count > count {
+            update_count(&mut map);
+            println!("WAIT");
+        } else {
+            update_map(&mut map, row, col);
+            println!("{} {}", col, row);
+            eprintln!("DEBUG place bomb {} {}", col, row);
+        }
         print_map(&map);
     }
 }
@@ -63,12 +70,22 @@ fn print_map(map: &Vec<Vec<char>>) {
 
 /// Return effect of explosion of bomb at (row, col)
 /// Mutate map inplace.
-fn blast_effect(map: &Vec<Vec<char>>, row: usize, col: usize, left_bomb: i32) -> u32 {
+///
+/// Params:
+/// - map: map
+/// - row, col: coordinate of the bomb
+/// - wait: what if we wait for all bomb to explode before puting this one
+fn blast_effect(map: &Vec<Vec<char>>, row: usize, col: usize, left_bomb: i32, wait: bool) -> u32 {
     if left_bomb < 1 {
         return 0;
     }
     match map[row][col] {
-        '#' | '@' | 'a'..='d' => return 0,
+        '#' | '@' => return 0,
+        'a'..='d' => {
+            if !wait {
+                return 0;
+            }
+        }
         _ => (),
     }
     let mut effect = 0_u32;
@@ -90,15 +107,21 @@ fn blast_effect(map: &Vec<Vec<char>>, row: usize, col: usize, left_bomb: i32) ->
             }
 
             match map[cell_row as usize][cell_col as usize] {
-                '@' => {
-                    effect = effect + 1;
-                    // map[cell_row as usize][cell_col as usize] = '3'; // TODO update smartly
-                }
+                '@' => effect = effect + 1,
                 '#' => break 'range,
                 '5'..='9' => {
-                    effect = effect
-                        + blast_effect(map, cell_row as usize, cell_col as usize, left_bomb - 1)
+                    if !wait {
+                        effect = effect
+                            + blast_effect(
+                                map,
+                                cell_row as usize,
+                                cell_col as usize,
+                                left_bomb - 1,
+                                wait,
+                            )
+                    }
                 }
+                'a'..='d' => (),
                 '.' => (),
                 _ => (),
             }
@@ -108,7 +131,17 @@ fn blast_effect(map: &Vec<Vec<char>>, row: usize, col: usize, left_bomb: i32) ->
 }
 
 /// Return coordinates where blast effect is maximal
-fn get_max_effect(map: &Vec<Vec<char>>, left_bomb: i32) -> (usize, usize) {
+fn get_which_max_effect(map: &Vec<Vec<char>>, left_bomb: i32, wait: bool) -> (usize, usize) {
+    let (row, col, count) = get_max_effect_all(map, left_bomb, false);
+    return (row, col);
+}
+
+fn get_max_effect(map: &Vec<Vec<char>>, left_bomb: i32, wait: bool) -> u32 {
+    let (row, col, count) = get_max_effect_all(map, left_bomb, wait);
+    return count;
+}
+
+fn get_max_effect_all(map: &Vec<Vec<char>>, left_bomb: i32, wait: bool) -> (usize, usize, u32) {
     let mut max_effect = 0_u32;
     let mut which_max = (0_usize, 0_usize);
     let mut effect: u32;
@@ -116,13 +149,13 @@ fn get_max_effect(map: &Vec<Vec<char>>, left_bomb: i32) -> (usize, usize) {
     let width = map[0].len();
 
     for (row, col) in iproduct!(0..height, 0..width) {
-        effect = blast_effect(&map, row, col, left_bomb);
+        effect = blast_effect(&map, row, col, left_bomb, wait);
         if effect > max_effect {
             which_max = (row, col).clone();
             max_effect = effect;
         }
     }
-    return which_max;
+    return (which_max.0, which_max.1, max_effect);
 }
 
 /// Update map in place
@@ -188,4 +221,8 @@ fn update_count(map: &mut Vec<Vec<char>>) {
             _ => (),
         }
     }
+}
+
+fn evaluate_wait(map: &Vec<Vec<char>>, left_bomb: i32) -> u32 {
+    return get_max_effect(map, left_bomb, true);
 }
