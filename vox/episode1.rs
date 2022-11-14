@@ -27,6 +27,7 @@ fn main() {
         map.push(input_line.chars().collect());
     }
     print_map(&map);
+    let mut first_move = true;
 
     // game loop
     loop {
@@ -39,6 +40,21 @@ fn main() {
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
 
+        if first_move {
+            // evaluate all move
+            let mut min_turn = 100;
+            let mut cur_turn = 0;
+            let mut min_row = 0_usize;
+            let mut min_col = 0_usize;
+            for (row, col) in iproduct!(0..height as usize, 0..width as usize) {
+                cur_turn = evaluate_first_move(&map, row, col, bombs, false);
+                if cur_turn < min_turn {
+                    (min_turn, min_row, min_col) = (cur_turn, row, col);
+                }
+            }
+            eprintln!("DEBUG 0530 {} {}: {}", min_col, min_row, min_turn);
+            first_move = false;
+        }
         let (row, col, count) = get_max_effect_all(&map, bombs, false);
         let wait_count = evaluate_wait(&map, bombs);
         eprintln!("DEBUG 0440 wait {} {}", wait_count, count);
@@ -163,19 +179,26 @@ fn get_max_effect_all(map: &Vec<Vec<char>>, left_bomb: i32, wait: bool) -> (usiz
 /// - put bomb at (row, col) (count down to explosion + 5)
 /// - update countdown before explosion
 /// - update cells
-fn update_map(map: &mut Vec<Vec<char>>, row: usize, col: usize) {
-    update_bomb(map, row, col);
+fn update_map(map: &mut Vec<Vec<char>>, row: usize, col: usize) -> Result<i32, i32> {
+    match update_bomb(map, row, col) {
+        Ok(_) => (),
+        Err(x) => return Err(x),
+    }
     update_count(map);
+    return Ok(0);
 }
 
-fn update_bomb(map: &mut Vec<Vec<char>>, row: usize, col: usize) {
+fn update_bomb(map: &mut Vec<Vec<char>>, row: usize, col: usize) -> Result<i32, i32> {
     let mut cell_row: i32;
     let mut cell_col: i32;
     let height = map.len() as i32;
     let width = map[0].len() as i32;
 
     match map[row][col] {
-        '#' => eprintln!("DEBUG 1260 bomb should not be put at ({}, {})", row, col),
+        '#' => {
+            eprintln!("DEBUG 1260 bomb should not be put at ({}, {})", row, col);
+            return Err(0);
+        }
         '.' => map[row][col] = '9',
         _ => (),
     }
@@ -194,13 +217,16 @@ fn update_bomb(map: &mut Vec<Vec<char>>, row: usize, col: usize) {
 
             match map[cell_row as usize][cell_col as usize] {
                 '#' => break 'range,
-                '6' | '7' | '8' | '9' => update_bomb(map, cell_row as usize, cell_col as usize),
+                '6' | '7' | '8' | '9' => {
+                    update_bomb(map, cell_row as usize, cell_col as usize);
+                }
                 '.' => map[cell_row as usize][cell_col as usize] = '4',
                 '@' => map[cell_row as usize][cell_col as usize] = 'd',
                 _ => (),
             }
         }
     }
+    return Ok(0);
 }
 
 fn update_count(map: &mut Vec<Vec<char>>) {
@@ -225,4 +251,50 @@ fn update_count(map: &mut Vec<Vec<char>>) {
 
 fn evaluate_wait(map: &Vec<Vec<char>>, left_bomb: i32) -> u32 {
     return get_max_effect(map, left_bomb, true);
+}
+
+/// What if fisrt move is this one?
+/// Return number of turn needed
+fn evaluate_first_move(
+    init_map: &Vec<Vec<char>>,
+    init_row: usize,
+    init_col: usize,
+    bombs: i32,
+    print: bool,
+) -> i32 {
+    let mut map = init_map.clone();
+    let height = map.len();
+    let width = map[0].len();
+    let mut bomb_left = true;
+    match update_map(&mut map, init_row, init_col) {
+        Ok(_) => (),
+        Err(_) => return 1000,
+    }
+    for turn in 1..(3 * bombs + 5) as usize {
+        let (row, col, count) = get_max_effect_all(&map, bombs, false);
+        let wait_count = evaluate_wait(&map, bombs);
+        if wait_count > count {
+            if print {
+                println!("WAIT");
+            }
+            update_count(&mut map);
+        } else {
+            if print {
+                println!("{} {}", row, col);
+            }
+            update_map(&mut map, row, col);
+        }
+
+        bomb_left = false;
+        for (row, col) in iproduct!(0..height, 0..width) {
+            if map[row][col] == '@' {
+                bomb_left = true;
+                break;
+            }
+        }
+        if !bomb_left {
+            return turn as i32;
+        }
+    }
+    return 1000;
 }
