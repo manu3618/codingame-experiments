@@ -94,6 +94,15 @@ fn main() {
         }
 
         set_rotation = cmp::max(-30, cmp::min(set_rotation, 30));
+        if h_speed.abs() < 20
+            && v_speed.abs() < 20
+            && remaining_h < 200
+            && (y - landing_site.1).abs() < 1000
+        {
+            eprintln!("landing");
+            set_power = 0;
+            set_rotation = 0;
+        }
 
         println!("{} {}", set_rotation, set_power);
     }
@@ -103,7 +112,7 @@ fn main() {
 /// if absolute bvalue of margin is greater than 1, then we can let the lander
 /// freefall
 /// if the absolute value of margin is lower than one, the full thrust is required
-/// to avoir crash
+/// to avoid crash
 fn z_margin(h_speed: i32, height: i32) -> f64 {
     let max_thrust = 4.0;
     let max_a = max_thrust - 3.711;
