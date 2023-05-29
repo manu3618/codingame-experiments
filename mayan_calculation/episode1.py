@@ -1,8 +1,4 @@
 # https://www.codingame.com/ide/puzzle/mayan-calculation
-import math
-import sys
-
-import numpy as np
 
 
 def to_base_n(x: int, n=20):
@@ -26,24 +22,23 @@ for n in range(20):
     dec_to_maya[n] = representation
 
 s1 = int(input())
-num1 = "\n".join(input() for _ in range(s1))
-s2 = int(input())
-num2 = "\n".join(input() for _ in range(s2))
+num1 = ["\n".join(input() for _ in range(h)) for _ in range(s1 // h)]
+num1 = [maya_to_dec[c] for c in num1]
+num1 = sum([num1[-i - 1] * 20**i for i in range(len(num1))])
 
-num1 = maya_to_dec[num1]
-num2 = maya_to_dec[num2]
+s2 = int(input())
+num2 = ["\n".join(input() for _ in range(h)) for _ in range(s2 // h)]
+num2 = [maya_to_dec[c] for c in num2]
+num2 = sum([num2[-i - 1] * 20**i for i in range(len(num2))])
 
 operation = input()
 
 result = eval(f"{num1} {operation} {num2}")
 
 
-print("Debug messages...", result, file=sys.stderr, flush=True)
 result = to_base_n(result)
-print("Debug messages...", result, file=sys.stderr, flush=True)
 
 
-# Write an answer using print
-# To debug: print("Debug messages...", file=sys.stderr, flush=True)
-# lines = ["".join([dec_to_maya[c][i] for c in result]) for i in range(l)]
+if len(result) == 0:
+    print(dec_to_maya[0])
 print("\n".join(dec_to_maya[c] for c in result))
