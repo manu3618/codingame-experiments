@@ -53,7 +53,7 @@ def steps(arr, pos, teleporters=()):
         if cur_case == "I":
             priorities = priorities[::-1]
         if cur_case == "X" and cass:
-            arr[next_pos] = " "
+            arr[pos[0]][pos[1]] = " "
         if cur_case == "B":
             cass = not cass
         if next_pos in teleporters:
