@@ -14,6 +14,7 @@ def which(arr, c="@"):
 
 
 def steps(arr, pos, teleporters=()):
+    pos = np.array(pos)
     priorities = ["SOUTH", "EAST", "NORTH", "WEST"]
     depl = {"SOUTH": (1, 0), "EAST": (0, 1), "NORTH": (-1, 0), "WEST": (0, -1)}
     cur_dir = "SOUTH"
@@ -25,6 +26,16 @@ def steps(arr, pos, teleporters=()):
         next_pos = pos + depl[cur_dir]
         next_case = arr[next_pos[0]][next_pos[1]]
         cur_case = arr[pos[0]][pos[1]]
+        print(
+            "Debug messages... begining",
+            pos,
+            next_pos,
+            depl[cur_dir],
+            next_case,
+            cur_case,
+            file=sys.stderr,
+            flush=True,
+        )
 
         if any(np.all(pos == p) for p in path[:-1]):
             print("Debug messages... loop", path, file=sys.stderr, flush=True)
@@ -35,8 +46,10 @@ def steps(arr, pos, teleporters=()):
         if cur_case in " @":
             pass
         if cur_case in "SENW":
+            if cur_dir != dirs[cur_case]:
+                cur_dir = dirs[cur_case]
+                continue
             cur_dir = dirs[cur_case]
-            continue
         if cur_case == "I":
             priorities = priorities[::-1]
         if cur_case == "X" and cass:
@@ -45,6 +58,7 @@ def steps(arr, pos, teleporters=()):
             cass = not cass
         if next_pos in teleporters:
             pos = teleporters[(teleporters.index(next_pos) + 1) % 2]
+            print("Debug messages... teleporting", file=sys.stderr, flush=True)
             continue
         if next_case == "#" or (next_case == "X" and not cass):
             print("Debug messages... obstacle", dir_idx, file=sys.stderr, flush=True)
