@@ -22,6 +22,7 @@ def steps(arr, pos, teleporters=()):
     cass = False
     dir_idx = 0
     path = []
+    beer_taken = False
     while True:
         next_pos = pos + depl[cur_dir]
         next_case = arr[next_pos[0]][next_pos[1]]
@@ -31,13 +32,13 @@ def steps(arr, pos, teleporters=()):
             pos,
             next_pos,
             depl[cur_dir],
-            next_case,
             cur_case,
+            next_case,
             file=sys.stderr,
             flush=True,
         )
 
-        if any(np.all(pos == p) for p in path[:-1]):
+        if len(path) > 2 and any(np.all(pos == p) for p in path[1:-1]):
             print("Debug messages... loop", path, file=sys.stderr, flush=True)
             return "LOOP"
         if cur_case == "$":
@@ -54,8 +55,13 @@ def steps(arr, pos, teleporters=()):
             priorities = priorities[::-1]
         if cur_case == "X" and cass:
             arr[pos[0]][pos[1]] = " "
-        if cur_case == "B":
+            print("Debug messages... breaking obstacle", file=sys.stderr, flush=True)
+            path = []
+            continue
+        if cur_case == "B" and not beer_taken:
             cass = not cass
+            print("Debug messages... beer", cass, file=sys.stderr, flush=True)
+            beer_taken = True
         if any(np.all(next_pos == a) for a in teleporters):
             if np.all(next_pos == teleporter[0]):
                 pos = teleporters[1]
@@ -73,6 +79,7 @@ def steps(arr, pos, teleporters=()):
         pos = pos + depl[cur_dir]
         path.append(pos)
         dir_idx = 0
+        beer_taken = False
         yield cur_dir
 
 
