@@ -56,8 +56,12 @@ def steps(arr, pos, teleporters=()):
             arr[pos[0]][pos[1]] = " "
         if cur_case == "B":
             cass = not cass
-        if next_pos in teleporters:
-            pos = teleporters[(teleporters.index(next_pos) + 1) % 2]
+        if any(np.all(next_pos == a) for a in teleporters):
+            if np.all(next_pos == teleporter[0]):
+                pos = teleporters[1]
+            else:
+                pos = teleporters[0]
+            yield cur_dir
             print("Debug messages... teleporting", file=sys.stderr, flush=True)
             continue
         if next_case == "#" or (next_case == "X" and not cass):
@@ -79,16 +83,20 @@ for _ in range(l):
 
 print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
 
-teleporter = np.array(which(map_, "T"))
+teleporter = which(map_, "T")
 teleporters = []
-if teleporter:
-    teleporters.append(teleporter)
+if teleporter is not None:
+    teleporters = [np.array(teleporter)] * 2
+    print("Debug messages... t", teleporter, file=sys.stderr, flush=True)
+    print("Debug messages... t", teleporters, file=sys.stderr, flush=True)
     map_[teleporter[0]][teleporter[1]] = "t"
-    teleporters.append(which(map_, "T"))
+    teleporters[1] = which(map_, "T")
+    teleporters.append(teleporter)
+    print("Debug messages... t", teleporters, file=sys.stderr, flush=True)
 
 init_pos = which(map_, "@")
 
 
-for step in steps(map_, init_pos, teleporter):
+for step in steps(map_, init_pos, teleporters):
     print("----", step, file=sys.stderr, flush=True)
     print(step)
