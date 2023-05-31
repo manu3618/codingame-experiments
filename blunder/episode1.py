@@ -13,6 +13,22 @@ def which(arr, c="@"):
             return idx, list(row).index(c)
 
 
+def has_loop(path):
+    if len(path) < 1000:
+        return False
+
+    path = [tuple(elt) for elt in path]
+    le = len(path) // 2
+    for i in range(le - 1):
+        if path[i : i + le] == path[-le:]:
+            print("Debug messages... loop", file=sys.stderr, flush=True)
+            print("path", path, file=sys.stderr, flush=True)
+            print(f"{i}", path[i : i + le], file=sys.stderr, flush=True)
+            print(". ", path[-le:], file=sys.stderr, flush=True)
+            return True
+    return False
+
+
 def steps(arr, pos, teleporters=()):
     pos = np.array(pos)
     priorities = ["SOUTH", "EAST", "NORTH", "WEST"]
@@ -38,8 +54,7 @@ def steps(arr, pos, teleporters=()):
             file=sys.stderr,
             flush=True,
         )
-
-        if len(path) > 2 and any(np.all(pos == p) for p in path[1:-1]):
+        if has_loop(path[:-1]):
             print("Debug messages... loop", path, file=sys.stderr, flush=True)
             yield "LOOP"
             return
@@ -115,5 +130,10 @@ init_pos = which(map_, "@")
 print("Debug messages... GO!", file=sys.stderr, flush=True)
 path = list(steps(map_, init_pos, teleporters))
 
-for idx, row in enumerate(map_):
-    print(f"#{idx}\t", row, file=sys.stderr, flush=True)
+if path[-1] == "LOOP":
+    print("LOOP")
+else:
+    print("\n".join(path))
+
+# for idx, row in enumerate(map_):
+#     print(f"#{idx}\t", row, file=sys.stderr, flush=True)
