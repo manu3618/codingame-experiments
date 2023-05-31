@@ -10,7 +10,7 @@ import numpy as np
 def which(arr, c="@"):
     for idx, row in enumerate(arr):
         if c in row:
-            return idx, row.index(c)
+            return idx, list(row).index(c)
 
 
 def steps(arr, pos, teleporters=()):
@@ -23,6 +23,7 @@ def steps(arr, pos, teleporters=()):
     dir_idx = 0
     path = []
     beer_taken = False
+    teleporter_taken = False
     while True:
         next_pos = pos + depl[cur_dir]
         next_case = arr[next_pos[0]][next_pos[1]]
@@ -62,13 +63,15 @@ def steps(arr, pos, teleporters=()):
             cass = not cass
             print("Debug messages... beer", cass, file=sys.stderr, flush=True)
             beer_taken = True
-        if any(np.all(next_pos == a) for a in teleporters):
-            if np.all(next_pos == teleporter[0]):
-                pos = teleporters[1]
-            else:
-                pos = teleporters[0]
+        if (tuple(next_pos) in teleporters) and not teleporter_taken:
+            print("Debug messages... pos", pos, file=sys.stderr, flush=True)
+            idx = teleporters.index(tuple(next_pos))
+            pos = np.array(teleporters[(idx + 1) % 2])
+            print("Debug messages... idx", idx, file=sys.stderr, flush=True)
+            print("Debug messages... pos", pos, file=sys.stderr, flush=True)
             yield cur_dir
             print("Debug messages... teleporting", file=sys.stderr, flush=True)
+            teleporter_taken = True
             continue
         if next_case == "#" or (next_case == "X" and not cass):
             print("Debug messages... obstacle", dir_idx, file=sys.stderr, flush=True)
@@ -80,6 +83,7 @@ def steps(arr, pos, teleporters=()):
         path.append(pos)
         dir_idx = 0
         beer_taken = False
+        teleporter_taken = False
         yield cur_dir
 
 
@@ -88,22 +92,29 @@ map_ = []
 for _ in range(l):
     map_.append(list(input()))
 
-print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
+# print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
 
 teleporter = which(map_, "T")
+# print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
+for idx, row in enumerate(map_):
+    print(f"#{idx}\t", row, file=sys.stderr, flush=True)
+
 teleporters = []
 if teleporter is not None:
     teleporters = [np.array(teleporter)] * 2
-    print("Debug messages... t", teleporter, file=sys.stderr, flush=True)
-    print("Debug messages... t", teleporters, file=sys.stderr, flush=True)
     map_[teleporter[0]][teleporter[1]] = "t"
     teleporters[1] = which(map_, "T")
     teleporters.append(teleporter)
-    print("Debug messages... t", teleporters, file=sys.stderr, flush=True)
+    teleporters = [tuple(elt) for elt in teleporters]
 
+print("Debug messages... init pos", file=sys.stderr, flush=True)
 init_pos = which(map_, "@")
 
 
-for step in steps(map_, init_pos, teleporters):
-    print("----", step, file=sys.stderr, flush=True)
+print("Debug messages... GO!", file=sys.stderr, flush=True)
+for i, step in enumerate(steps(map_, init_pos, teleporters)):
     print(step)
+    # if i > 51:
+    #     break
+for idx, row in enumerate(map_):
+    print(f"#{idx}\t", row, file=sys.stderr, flush=True)
