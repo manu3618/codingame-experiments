@@ -41,7 +41,8 @@ def steps(arr, pos, teleporters=()):
 
         if len(path) > 2 and any(np.all(pos == p) for p in path[1:-1]):
             print("Debug messages... loop", path, file=sys.stderr, flush=True)
-            return "LOOP"
+            yield "LOOP"
+            return
         if cur_case == "$":
             print("Debug messages... real end", file=sys.stderr, flush=True)
             return cur_dir
@@ -112,9 +113,7 @@ init_pos = which(map_, "@")
 
 
 print("Debug messages... GO!", file=sys.stderr, flush=True)
-for i, step in enumerate(steps(map_, init_pos, teleporters)):
-    print(step)
-    # if i > 51:
-    #     break
+path = list(steps(map_, init_pos, teleporters))
+
 for idx, row in enumerate(map_):
     print(f"#{idx}\t", row, file=sys.stderr, flush=True)
