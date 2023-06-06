@@ -1,5 +1,4 @@
 # https://www.codingame.com/ide/puzzle/blunder-episode-1
-import sys
 
 import numpy as np
 
@@ -21,10 +20,6 @@ def has_loop(path):
     le = len(path) // 2
     for i in range(le - 1):
         if path[i : i + le] == path[-le:]:
-            print("Debug messages... loop", file=sys.stderr, flush=True)
-            print("path", path, file=sys.stderr, flush=True)
-            print(f"{i}", path[i : i + le], file=sys.stderr, flush=True)
-            print(". ", path[-le:], file=sys.stderr, flush=True)
             return True
     return False
 
@@ -40,26 +35,15 @@ def steps(arr, pos, teleporters=()):
     path = []
     beer_taken = False
     teleporter_taken = False
+    has_inverted = False
     while True:
         next_pos = pos + depl[cur_dir]
         next_case = arr[next_pos[0]][next_pos[1]]
         cur_case = arr[pos[0]][pos[1]]
-        print(
-            "Debug messages... begining",
-            pos,
-            next_pos,
-            depl[cur_dir],
-            cur_case,
-            next_case,
-            file=sys.stderr,
-            flush=True,
-        )
         if has_loop(path[:-1]):
-            print("Debug messages... loop", path, file=sys.stderr, flush=True)
             yield "LOOP"
             return
         if cur_case == "$":
-            print("Debug messages... real end", file=sys.stderr, flush=True)
             return cur_dir
         if cur_case in " @":
             pass
@@ -68,29 +52,22 @@ def steps(arr, pos, teleporters=()):
                 cur_dir = dirs[cur_case]
                 continue
             cur_dir = dirs[cur_case]
-        if cur_case == "I":
+        if cur_case == "I" and not has_inverted:
             priorities = priorities[::-1]
+            has_inverted = True
         if cur_case == "X" and cass:
             arr[pos[0]][pos[1]] = " "
-            print("Debug messages... breaking obstacle", file=sys.stderr, flush=True)
             path = []
             continue
         if cur_case == "B" and not beer_taken:
             cass = not cass
-            print("Debug messages... beer", cass, file=sys.stderr, flush=True)
             beer_taken = True
-        if (tuple(next_pos) in teleporters) and not teleporter_taken:
-            print("Debug messages... pos", pos, file=sys.stderr, flush=True)
-            idx = teleporters.index(tuple(next_pos))
+        if (tuple(pos) in teleporters) and not teleporter_taken:
+            idx = teleporters.index(tuple(pos))
             pos = np.array(teleporters[(idx + 1) % 2])
-            print("Debug messages... idx", idx, file=sys.stderr, flush=True)
-            print("Debug messages... pos", pos, file=sys.stderr, flush=True)
-            yield cur_dir
-            print("Debug messages... teleporting", file=sys.stderr, flush=True)
             teleporter_taken = True
             continue
         if next_case == "#" or (next_case == "X" and not cass):
-            print("Debug messages... obstacle", dir_idx, file=sys.stderr, flush=True)
             cur_dir = priorities[dir_idx]
             dir_idx += 1
             continue
@@ -100,6 +77,7 @@ def steps(arr, pos, teleporters=()):
         dir_idx = 0
         beer_taken = False
         teleporter_taken = False
+        has_inverted = False
         yield cur_dir
 
 
@@ -108,12 +86,7 @@ map_ = []
 for _ in range(l):
     map_.append(list(input()))
 
-# print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
-
 teleporter = which(map_, "T")
-# print("Debug messages... map\n", np.array(map_), file=sys.stderr, flush=True)
-for idx, row in enumerate(map_):
-    print(f"#{idx}\t", row, file=sys.stderr, flush=True)
 
 teleporters = []
 if teleporter is not None:
@@ -123,17 +96,13 @@ if teleporter is not None:
     teleporters.append(teleporter)
     teleporters = [tuple(elt) for elt in teleporters]
 
-print("Debug messages... init pos", file=sys.stderr, flush=True)
 init_pos = which(map_, "@")
 
 
-print("Debug messages... GO!", file=sys.stderr, flush=True)
 path = list(steps(map_, init_pos, teleporters))
+
 
 if path[-1] == "LOOP":
     print("LOOP")
 else:
     print("\n".join(path))
-
-# for idx, row in enumerate(map_):
-#     print(f"#{idx}\t", row, file=sys.stderr, flush=True)
