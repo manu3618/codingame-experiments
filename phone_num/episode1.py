@@ -5,7 +5,7 @@ import sys
 # Auto-generated code below aims at helping you parse
 # the standard input according to the problem statement.
 
-phone_nums = []
+phone_nums = set()
 
 n = int(input())
 storage = 0
@@ -22,7 +22,7 @@ def get_max_common_len(a: str, b: str):
 for _ in range(n):
     telephone = input()
     if any(telephone.startswith(x) or x.startswith(telephone) for x in phone_nums):
-        phone_nums.append(telephone)
+        phone_nums.add(telephone)
         continue
 
     c = [get_max_common_len(num, telephone) for num in phone_nums]
@@ -32,7 +32,7 @@ for _ in range(n):
     print("Debug messages... to add ", m, file=sys.stderr, flush=True)
     storage += len(telephone) - m
     print("Debug messages... current", storage, file=sys.stderr, flush=True)
-    phone_nums.append(telephone)
+    phone_nums.add(telephone)
 
 
 print(storage)
