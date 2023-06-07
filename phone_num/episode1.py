@@ -2,14 +2,10 @@
 import math
 import sys
 
-# Auto-generated code below aims at helping you parse
-# the standard input according to the problem statement.
-
 phone_nums = set()
 
 n = int(input())
 storage = 0
-to_break = False
 
 
 def get_max_common_len(a: str, b: str):
@@ -19,19 +15,17 @@ def get_max_common_len(a: str, b: str):
     return 0
 
 
+def get_additional_storage(num: str, phone_numbers):
+    for idx in range(len(num) + 1, 0, -1):
+        for phone in phone_numbers:
+            if num[:idx] == phone[:idx]:
+                return len(num) - idx
+    return len(num)
+
+
 for _ in range(n):
     telephone = input()
-    if any(telephone.startswith(x) or x.startswith(telephone) for x in phone_nums):
-        phone_nums.add(telephone)
-        continue
-
-    c = [get_max_common_len(num, telephone) for num in phone_nums]
-    c.append(0)
-    m = max(c)
-
-    print("Debug messages... to add ", m, file=sys.stderr, flush=True)
-    storage += len(telephone) - m
-    print("Debug messages... current", storage, file=sys.stderr, flush=True)
+    storage += get_additional_storage(telephone, phone_nums)
     phone_nums.add(telephone)
 
 
