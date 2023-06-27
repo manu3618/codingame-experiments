@@ -11,33 +11,29 @@ macro_rules! parse_input {
 
 #[derive(Debug)]
 struct Thor {
-    x: i32,
-    y: i32,
+    coord: Coord,
+    strikes: i32,
 }
 
 #[derive(Debug, Copy, Clone)]
 struct Giant {
+    coord: Coord,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Coord {
     x: i32,
     y: i32,
 }
 
-trait Point {
+impl Coord {
     /// Get distance to other
-    fn dist(&self, other: &Self) -> i32;
-    /// Get direction to other
-    fn dir(&self, other: &Giant) -> String;
-    /// Get minimal distance to all others
-    // fn min_dist(&self, &others: Vec<dyn Point>) -> i32;
-    /// Update current coordinates given the movement
-    fn move_towards(&mut self, movement: &str);
-}
-
-impl Point for Thor {
     fn dist(&self, other: &Self) -> i32 {
         i32::max((other.x - self.x).abs(), (other.y - self.y).abs())
     }
 
-    fn dir(&self, other: &Giant) -> String {
+    /// Get direction to other
+    fn dir(&self, other: &Coord) -> String {
         let mut dir = String::from("");
         match other.y - self.y {
             0 => {}
@@ -52,6 +48,7 @@ impl Point for Thor {
         dir
     }
 
+    /// Update current coordinates given the movement
     fn move_towards(&mut self, movement: &str) {
         if movement.contains('N') {
             self.y -= 1;
@@ -66,45 +63,43 @@ impl Point for Thor {
             self.x -= 1;
         }
     }
+
+    /// Move toward specific coordinates
+    fn move_to(&mut self, target: &Coord) {
+        self.move_towards(&self.dir(target));
+    }
 }
 
 impl Thor {
     /// l1 distance to the giant
     fn dist_giant(&self, other: &Giant) -> i32 {
-        i32::max((other.x - self.x).abs(), (other.y - self.y).abs())
+        self.coord.dist(&other.coord)
     }
 
     /// distance to the nearest giant. default to i32::MAX
-    fn min_dist(&self, giants: &Vec<Giant>) -> i32 {
+    fn min_dist(&self, giants: &[Giant]) -> i32 {
         giants
             .iter()
             .map(|x| self.dist_giant(x))
             .reduce(i32::min)
             .unwrap_or(i32::MAX)
     }
-}
-
-/// l1 distance between 2 points
-fn dist(a: (i32, i32), b: (i32, i32)) -> i32 {
-    i32::max((a.0 - b.0).abs(), (a.1 - b.1).abs())
-}
-
-/// minimal distance between giants and thor
-fn min_dist(giants: &Vec<(i32, i32)>, thor: (i32, i32)) -> i32 {
-    giants
-        .iter()
-        .map(|x| dist(*x, thor))
-        .reduce(i32::min)
-        .unwrap_or(i32::MAX)
+    fn dir(&self, dst: &Coord) -> String {
+        self.coord.dir(dst)
+    }
+    /// Update current coordinates given the movement
+    fn move_towards(&mut self, movement: &str) {
+        self.coord.move_towards(movement)
+    }
 }
 
 /// barycenter of nearest giants
-fn barycenter(giants: &Vec<Giant>) -> Option<Giant> {
-    if let Some(giant) = giants.iter().copied().reduce(|x, g| Giant {
+fn barycenter(giants: &Vec<Coord>) -> Option<Coord> {
+    if let Some(giant) = giants.iter().copied().reduce(|x, g| Coord {
         x: g.x + x.x,
         y: g.y + x.y,
     }) {
-        Some(Giant {
+        Some(Coord {
             x: giant.x / giants.len() as i32,
             y: giant.y / giants.len() as i32,
         })
@@ -113,15 +108,54 @@ fn barycenter(giants: &Vec<Giant>) -> Option<Giant> {
     }
 }
 
+/// run simulation to know if the sequence of movement is succesful
+fn simulate(thor: &mut Thor, giants: &mut Vec<Giant>, actions: Vec<String>) -> Result<(), String> {
+    for action in actions.iter() {
+        let act = action.as_str();
+        match act {
+            "STRIKE" => {
+                // update strikes
+                thor.strikes -= 1;
+                if thor.strikes <= 0 {
+                    return Err("Not enough strikes left".into());
+                }
+                // remove giants
+                let _ = &mut giants.retain(|&giant| thor.dist_giant(&giant) > 2);
+            }
+            "N" | "S" | "E" | "W" | "NE" | "SE" | "SW" | "NW" => thor.move_towards(act),
+            _ => unreachable!(),
+        }
+
+        // move giant
+        for giant in &mut *giants {
+            giant.coord.move_to(&thor.coord);
+        }
+
+        // check victory
+        if giants.is_empty() {
+            return Ok(());
+        }
+        if thor.min_dist(giants) < 1 {
+            return Err("Reached by a giant".into());
+        }
+    }
+    Err("Not finished".into())
+}
+
 fn main() {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let inputs = input_line.split(' ').collect::<Vec<_>>();
     let tx = parse_input!(inputs[0], i32); // Thor coordinates
     let ty = parse_input!(inputs[1], i32); // Thor coordinates
-    let mut thor = Thor { x: tx, y: ty };
+    let mut thor = Thor {
+        coord: Coord { x: tx, y: ty },
+        strikes: 0,
+    };
     let mut giants: Vec<Giant> = Vec::new();
     let mut trigger_dist = 2;
+
+    let _ = simulate(&mut thor, &mut giants, vec!["WAIT".into()]); // XXX
 
     // game loop
     loop {
@@ -137,14 +171,17 @@ fn main() {
             let inputs = input_line.split(' ').collect::<Vec<_>>();
             let x = parse_input!(inputs[0], i32);
             let y = parse_input!(inputs[1], i32);
-            giants.push(Giant { x: x, y: y });
+            eprintln!("Debug message giants: {:?}, {:?}", &x, &y);
+            giants.push(Giant {
+                coord: Coord { x, y },
+            });
         }
         let dist = thor.min_dist(&giants);
         if dist <= trigger_dist {
             println!("STRIKE");
             continue;
         }
-        if let Some(dst) = barycenter(&giants) {
+        if let Some(dst) = barycenter(&giants.iter().map(|g| g.coord).collect()) {
             let dir = thor.dir(&dst);
             eprintln!("Debug message {:?} {:?} -> {:?}", dir, &thor, &dst);
             thor.move_towards(&dir);
@@ -159,10 +196,6 @@ fn main() {
             continue;
         }
 
-        // Write an action using println!("message...");
-        // To debug: eprintln!("Debug message...");
-
-        // The movement or action to be carried out: WAIT STRIKE N NE E SE S SW W or N
         println!("WAIT");
     }
 }
