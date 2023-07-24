@@ -126,10 +126,7 @@ fn simulate(thor: &mut Thor, giants: &mut Vec<Giant>, actions: Vec<String>) -> R
             _ => unreachable!(),
         }
 
-        // move giant
-        for giant in &mut *giants {
-            giant.coord.move_to(&thor.coord);
-        }
+        move_giants(giants, thor);
 
         // check victory
         if giants.is_empty() {
@@ -140,6 +137,49 @@ fn simulate(thor: &mut Thor, giants: &mut Vec<Giant>, actions: Vec<String>) -> R
         }
     }
     Err("Not finished".into())
+}
+
+fn get_naive_sequence(thor: &mut Thor, giants: &mut Vec<Giant>) -> Vec<String> {
+    let mut seq = Vec::new();
+    let mut trigger_dist = 2;
+    loop {
+        // check victory
+        if giants.is_empty() || thor.min_dist(giants) < 1 {
+            break;
+        }
+
+        let dist = thor.min_dist(&giants);
+        if dist <= trigger_dist {
+            seq.push("STRIKE".into());
+            move_giants(giants, thor);
+            continue;
+        }
+        if let Some(dst) = barycenter(&giants.iter().map(|g| g.coord).collect()) {
+            let dir = thor.dir(&dst);
+            eprintln!("Debug message {:?} {:?} -> {:?}", dir, &thor, &dst);
+            thor.move_towards(&dir);
+            if !dir.is_empty() {
+                seq.push(String::from(&dir));
+                trigger_dist = 2;
+                move_giants(giants, thor);
+                continue;
+            }
+        } else {
+            seq.push("WAIT".into());
+            trigger_dist = 1;
+            move_giants(giants, thor);
+            continue;
+        }
+        seq.push("WAIT".into());
+        move_giants(giants, thor);
+    }
+    seq
+}
+
+fn move_giants(giants: &mut Vec<Giant>, thor: &Thor) {
+    for giant in &mut *giants {
+        giant.coord.move_to(&thor.coord);
+    }
 }
 
 fn main() {
