@@ -23,11 +23,7 @@ fn z_margin(h_speed: i32, height: i32) -> f64 {
     ((height as f64) * max_a) / (2.0 * h_speed as f64)
 }
 
-fn x_margin(x_speed: i32, dist: i32) -> f64 {
-    let max_a = 1.0;
-    ((dist as f64) * max_a) / (2.0 * x_speed as f64)
-}
-
+/// PID implementation for rotation
 fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
     let k0 = 2;
     let k1 = 1;
@@ -38,6 +34,24 @@ fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
         h_speed, landing_distance, result
     );
     cmp::max(-max_rotation, cmp::min(result, max_rotation))
+}
+
+/// Get possible landing phase given the landoer position and the landig site
+fn get_landing_phase(position: (i32, i32), target: (i32, i32)) -> LandingPhase {
+    let line = Line {
+        p0: position,
+        p1: target,
+    };
+    if let Some((a, _)) = line.get_equation() {
+        if a.abs() < 0.25 {
+            if position.0 < target.0 {
+                return LandingPhase::Horizontal(Direction::Right);
+            } else {
+                return LandingPhase::Horizontal(Direction::Left);
+            }
+        }
+    }
+    return LandingPhase::Direct;
 }
 
 #[derive(Debug)]
@@ -164,13 +178,13 @@ struct Lander {
     phase: LandingPhase,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Direction {
     Left,
     Right,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum LandingPhase {
     Direct,
     Horizontal(Direction),
@@ -191,27 +205,25 @@ impl Lander {
         }
     }
 
-    fn set_landing_phase(&mut self, target: (i32, i32)) {
-        self.phase = LandingPhase::Direct;
-        let line = Line {
-            p0: (self.x, self.height),
-            p1: target,
-        };
-        if let Some((a, _)) = line.get_equation() {
-            if a.abs() < 0.25 {
-                if self.x < target.0 {
-                    self.phase = LandingPhase::Horizontal(Direction::Right)
-                } else {
-                    self.phase = LandingPhase::Horizontal(Direction::Left)
-                }
-            }
-        }
+    fn set_landing_phase(&mut self) {
         if self.h_speed.abs() < 20
             && self.v_speed.abs() < 20
-            && self.height - target.1 < 200
-            && (self.x - target.0).abs() < 1000
+            && self.height - self.target.1 < 200
+            && (self.x - self.target.0).abs() < 1000
         {
-            self.phase = LandingPhase::Landing
+            self.phase = LandingPhase::Landing;
+            return;
+        }
+        let next_phase = get_landing_phase((self.x, self.height), self.target);
+        match self.phase {
+            LandingPhase::Direct => self.phase = next_phase,
+            LandingPhase::Horizontal(_) => match next_phase {
+                LandingPhase::Direct | LandingPhase::Landing => self.phase = next_phase,
+                LandingPhase::Horizontal(_) => {
+                    // continue in the same direction
+                }
+            },
+            LandingPhase::Landing => {}
         }
     }
 
@@ -246,16 +258,31 @@ impl Lander {
         let kv = 4;
         let sp = kp * (self.height - self.target.1) + kv * self.v_speed;
         eprintln!(
-            "Debug message... {} = {} x {} + {} x {}",
+            "Debug message... Thrust {} = {} x {} + {} x {}",
             sp,
             kp,
             self.height - self.target.1,
             kv,
             self.v_speed
-        )
+        );
+        self.thrust = sp.min(4).max(0);
     }
 
-    fn set_rotation_thrust(&mut self) {}
+    fn set_rotation_thrust(&mut self) {
+        match &self.phase {
+            LandingPhase::Direct => {
+                self.set_thrust();
+                self.set_rotation();
+            }
+            LandingPhase::Horizontal(dir) => {
+                self.set_horizontal_translation(*dir);
+            }
+            LandingPhase::Landing => {
+                self.thrust = 0;
+                self.rotation = 0;
+            }
+        }
+    }
 
     fn set_limits(&mut self) {
         let h_speed_limit = 50;
