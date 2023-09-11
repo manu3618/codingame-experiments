@@ -13,7 +13,7 @@ macro_rules! parse_input {
 }
 
 /// compute margin
-/// if absolute bvalue of margin is greater than 1, then we can let the lander
+/// if absolute value of margin is greater than 1, then we can let the lander
 /// freefall
 /// if the absolute value of margin is lower than one, the full thrust is required
 /// to avoid crash
@@ -27,7 +27,7 @@ fn z_margin(h_speed: i32, height: i32) -> f64 {
 fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
     let k0 = 2;
     let k1 = 1;
-    let result = -k0 * landing_distance / 100 + k1 * h_speed;
+    let result = k0 * landing_distance / 100 + k1 * h_speed;
     let max_rotation = 45;
     eprintln!(
         "Debug message... speed {} distance {} result {}",
@@ -43,6 +43,7 @@ fn get_landing_phase(position: (i32, i32), target: (i32, i32), terrain: &Terrain
         p1: target,
     };
     if let Some((a, _)) = line.get_equation() {
+        eprintln!("Debug message... landign phase a: {:?}", a);
         if a.abs() < 0.25 || terrain.has_conflict(line) {
             if position.0 < target.0 {
                 return LandingPhase::Horizontal(Direction::Right);
@@ -67,7 +68,7 @@ impl Line {
         if self.p0.1 == self.p1.1 {
             return None;
         }
-        let a = (self.p0.0 - self.p1.0) as f64 / (self.p0.1 - self.p1.1) as f64;
+        let a = (self.p0.1 - self.p1.1) as f64 / (self.p0.0 - self.p1.0) as f64;
         let b = self.p0.1 as f64 - a * self.p0.0 as f64;
         Some((a, b))
     }
@@ -111,15 +112,13 @@ impl Terrain {
                 p1: *point,
             };
             if let Some((x, y)) = direct.get_intersection(&segment) {
-                if x > f64::min(previous.0 as f64, point.0 as f64)
-                    && x > f64::max(previous.0 as f64, point.0 as f64)
+                if x > f64::min(direct.p0.0 as f64, direct.p1.0 as f64)
+                    && x < f64::max(direct.p0.0 as f64, direct.p1.0 as f64)
                 {
-                    eprintln!(
-                        "Debug message... collision detected {:?}, {:?}, {:?}",
-                        direct,
-                        &segment,
-                        (x, y)
-                    );
+                    eprintln!("Debug message... collision detected");
+                    eprintln!("Debug message... collision trajectory {:?}", direct);
+                    eprintln!("Debug message... collision land {:?}", &segment);
+                    eprintln!("Debug message... coords {:?}", (x, y));
                     return true;
                 }
             }
@@ -220,9 +219,16 @@ impl Lander {
     /// * zero vertical velocity
     /// * MAX_SPEED horizontal velocity
     fn set_horizontal_translation(&mut self, dir: Direction) {
-        self.set_rotation();
-        if self.h_speed.abs() > MAX_SPEED {
-            self.rotation = 0;
+        if self.h_speed.abs() >= MAX_SPEED {
+            self.rotation = match dir {
+                Direction::Left => -MAX_ROTATION,
+                Direction::Right => MAX_ROTATION,
+            }
+        } else {
+            self.rotation = match dir {
+                Direction::Left => MAX_ROTATION,
+                Direction::Right => -MAX_ROTATION,
+            }
         }
         if self.v_speed < -1 {
             self.rotation = 0;
@@ -233,8 +239,8 @@ impl Lander {
             }
         } else if self.rotation.abs() > MAX_ROTATION {
             self.rotation = match dir {
-                Direction::Left => -MAX_ROTATION,
-                Direction::Right => MAX_ROTATION,
+                Direction::Left => MAX_ROTATION,
+                Direction::Right => -MAX_ROTATION,
             }
         }
     }
@@ -244,9 +250,11 @@ impl Lander {
     }
 
     fn set_thrust(&mut self) {
-        let kp = 1;
-        let kv = 4;
-        let sp = kp * (self.height - self.target.1) + kv * self.v_speed;
+        let margin = z_margin(self.v_speed, self.height - self.target.1);
+        eprintln!("Debug message... z_margin {}", &margin);
+        let kp = -5;
+        let kv = -10;
+        let sp = kp * (self.height - self.target.1) / 100 + kv * self.v_speed;
         eprintln!(
             "Debug message... Thrust {} = {} x {} + {} x {}",
             sp,
@@ -257,6 +265,12 @@ impl Lander {
         );
         let sp = (sp as f64 / (PI / 180.0).cos()) as i32;
         self.thrust = sp.min(4).max(0);
+
+        if margin.abs() < 1.1 {
+            self.thrust = 4;
+        } else {
+            self.thrust = (-self.v_speed / 5) as i32;
+        }
     }
 
     /// Set both rotation and thrust depending on landing phase and target
@@ -280,11 +294,15 @@ impl Lander {
     /// put parameters closer to central limits so that parameters stay in control
     fn set_limits(&mut self) {
         if self.h_speed.abs() > MAX_SPEED {
-            println!("Debug message SHOULD NOT BE REACHED... speed limit");
-            self.rotation = 0;
+            eprintln!("Debug message SHOULD NOT BE REACHED... speed limit");
+            if self.h_speed > 0 {
+                self.rotation = self.rotation.abs();
+            } else {
+                self.rotation = -self.rotation.abs();
+            }
         }
         if self.rotation.abs() > 30 {
-            println!("Debug message SHOULD NOT BE REACHED... excesive rotation");
+            eprintln!("Debug message SHOULD NOT BE REACHED... excesive rotation");
             self.thrust = 4;
         }
     }
