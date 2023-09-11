@@ -1,5 +1,5 @@
 // https://www.codingame.com/training/expert/mars-lander-episode-3
-use std::cmp;
+use std::f64::consts::PI;
 use std::io;
 use std::iter::zip;
 
@@ -33,17 +33,17 @@ fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
         "Debug message... speed {} distance {} result {}",
         h_speed, landing_distance, result
     );
-    cmp::max(-max_rotation, cmp::min(result, max_rotation))
+    result.min(max_rotation).max(-max_rotation)
 }
 
 /// Get possible landing phase given the landoer position and the landig site
-fn get_landing_phase(position: (i32, i32), target: (i32, i32)) -> LandingPhase {
+fn get_landing_phase(position: (i32, i32), target: (i32, i32), terrain: &Terrain) -> LandingPhase {
     let line = Line {
         p0: position,
         p1: target,
     };
     if let Some((a, _)) = line.get_equation() {
-        if a.abs() < 0.25 {
+        if a.abs() < 0.25 || terrain.has_conflict(line) {
             if position.0 < target.0 {
                 return LandingPhase::Horizontal(Direction::Right);
             } else {
@@ -51,7 +51,7 @@ fn get_landing_phase(position: (i32, i32), target: (i32, i32)) -> LandingPhase {
             }
         }
     }
-    return LandingPhase::Direct;
+    LandingPhase::Direct
 }
 
 #[derive(Debug)]
@@ -103,11 +103,7 @@ impl Terrain {
     }
 
     /// determine if the direct route between start and target enter the terrain
-    fn has_conflict(&self, start: (i32, i32), target: (i32, i32)) -> bool {
-        let direct = Line {
-            p0: start,
-            p1: target,
-        };
+    fn has_conflict(&self, direct: Line) -> bool {
         let mut previous = (0, 0);
         for point in &self.land {
             let segment = Line {
@@ -127,20 +123,9 @@ impl Terrain {
                     return true;
                 }
             }
+            previous = (point.0, point.1);
         }
         false
-    }
-
-    fn get_target(&self, start: (i32, i32)) -> (i32, i32) {
-        let landing_site = self.get_landing_site();
-        if !self.has_conflict(start, landing_site) {
-            return landing_site;
-        }
-        if landing_site.0 > start.0 {
-            (0, start.1)
-        } else {
-            (7000, start.1)
-        }
     }
 
     /// Get height at given abcissa
@@ -205,7 +190,7 @@ impl Lander {
         }
     }
 
-    fn set_landing_phase(&mut self) {
+    fn set_landing_phase(&mut self, terrain: &Terrain) {
         if self.h_speed.abs() < 20
             && self.v_speed.abs() < 20
             && self.height - self.target.1 < 200
@@ -214,7 +199,7 @@ impl Lander {
             self.phase = LandingPhase::Landing;
             return;
         }
-        let next_phase = get_landing_phase((self.x, self.height), self.target);
+        let next_phase = get_landing_phase((self.x, self.height), self.target, terrain);
         match self.phase {
             LandingPhase::Direct => self.phase = next_phase,
             LandingPhase::Horizontal(_) => match next_phase {
@@ -223,10 +208,17 @@ impl Lander {
                     // continue in the same direction
                 }
             },
-            LandingPhase::Landing => {}
+            LandingPhase::Landing => {
+                // we may have overrun the landing site
+                self.phase = next_phase
+            }
         }
     }
 
+    /// Adjust rotation and thrust to obtain
+    ///
+    /// * zero vertical velocity
+    /// * MAX_SPEED horizontal velocity
     fn set_horizontal_translation(&mut self, dir: Direction) {
         self.set_rotation();
         if self.h_speed.abs() > MAX_SPEED {
@@ -239,12 +231,10 @@ impl Lander {
             if self.rotation.abs() < MAX_ROTATION {
                 self.thrust = 0;
             }
-        } else {
-            if self.rotation.abs() > MAX_ROTATION {
-                self.rotation = match dir {
-                    Direction::Left => -MAX_ROTATION,
-                    Direction::Right => MAX_ROTATION,
-                }
+        } else if self.rotation.abs() > MAX_ROTATION {
+            self.rotation = match dir {
+                Direction::Left => -MAX_ROTATION,
+                Direction::Right => MAX_ROTATION,
             }
         }
     }
@@ -265,9 +255,11 @@ impl Lander {
             kv,
             self.v_speed
         );
+        let sp = (sp as f64 / (PI / 180.0).cos()) as i32;
         self.thrust = sp.min(4).max(0);
     }
 
+    /// Set both rotation and thrust depending on landing phase and target
     fn set_rotation_thrust(&mut self) {
         match &self.phase {
             LandingPhase::Direct => {
@@ -282,16 +274,17 @@ impl Lander {
                 self.rotation = 0;
             }
         }
+        self.set_limits();
     }
 
+    /// put parameters closer to central limits so that parameters stay in control
     fn set_limits(&mut self) {
-        let h_speed_limit = 50;
-        if self.h_speed.abs() > h_speed_limit {
-            println!("Debug message... speed limit");
+        if self.h_speed.abs() > MAX_SPEED {
+            println!("Debug message SHOULD NOT BE REACHED... speed limit");
             self.rotation = 0;
         }
         if self.rotation.abs() > 30 {
-            println!("Debug message... excesive rotation");
+            println!("Debug message SHOULD NOT BE REACHED... excesive rotation");
             self.thrust = 4;
         }
     }
@@ -330,6 +323,10 @@ fn main() {
         let fuel = parse_input!(inputs[4], i32); // the quantity of remaining fuel in liters.
         let rotate = parse_input!(inputs[5], i32); // the rotation angle in degrees (-90 to 90).
         let power = parse_input!(inputs[6], i32); // the thrust power (0 to 4).
+        eprintln!(
+            "Debug message... inputs {:?}, {:?}; {:?}",
+            fuel, rotate, power
+        );
 
         eprintln!("Debug message... lander {:?}", lander);
         lander.x = x;
@@ -337,7 +334,7 @@ fn main() {
         lander.h_speed = h_speed;
         lander.v_speed = v_speed;
 
-        lander.set_landing_phase();
+        lander.set_landing_phase(&land);
         lander.set_rotation_thrust();
         eprintln!("Debug message... lander {:?}", lander);
         println!("{} {}", lander.rotation, lander.thrust);
