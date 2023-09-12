@@ -36,23 +36,40 @@ fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
     result.min(max_rotation).max(-max_rotation)
 }
 
+fn get_extremity(dir: Direction, p: (i32, i32)) -> (i32, i32) {
+    match dir {
+        Direction::Right => (6999, p.1),
+        Direction::Left => (0, p.1),
+    }
+}
+
 /// Get possible landing phase given the landoer position and the landig site
 fn get_landing_phase(position: (i32, i32), target: (i32, i32), terrain: &Terrain) -> LandingPhase {
     let line = Line {
         p0: position,
         p1: target,
     };
+    let mut landing_phase = LandingPhase::Direct;
     if let Some((a, _)) = line.get_equation() {
         eprintln!("Debug message... landign phase a: {:?}", a);
         if a.abs() < 0.25 || terrain.has_conflict(line) {
             if position.0 < target.0 {
-                return LandingPhase::Horizontal(Direction::Right);
+                landing_phase = LandingPhase::Horizontal(Direction::Right);
             } else {
-                return LandingPhase::Horizontal(Direction::Left);
+                landing_phase = LandingPhase::Horizontal(Direction::Left);
             }
         }
     }
-    LandingPhase::Direct
+    if let LandingPhase::Horizontal(dir) = landing_phase {
+        let line = Line {
+            p0: get_extremity(dir, position),
+            p1: position,
+        };
+        if terrain.has_conflict(line) {
+            landing_phase = LandingPhase::Up(dir);
+        }
+    }
+    landing_phase
 }
 
 #[derive(Debug)]
@@ -65,18 +82,20 @@ impl Line {
     /// get a and b coefficient so that equation looks like
     /// y = ax + b
     fn get_equation(&self) -> Option<(f64, f64)> {
-        if self.p0.1 == self.p1.1 {
+        if self.p0.0 == self.p1.0 {
             return None;
         }
         let a = (self.p0.1 - self.p1.1) as f64 / (self.p0.0 - self.p1.0) as f64;
-        let b = self.p0.1 as f64 - a * self.p0.0 as f64;
-        Some((a, b))
+        let b0 = self.p0.1 as f64 - a * self.p0.0 as f64;
+        let b1 = self.p1.1 as f64 - a * self.p1.0 as f64;
+        assert!((b0 - b1).abs() < 1.0);
+        Some((a, b0))
     }
 
     /// get intersection point between 2 lines. a line is defined by 2 points
     fn get_intersection(&self, other: &Line) -> Option<(f64, f64)> {
         if let (Some((a, b)), Some((c, d))) = (self.get_equation(), other.get_equation()) {
-            let x = (b - d) / (a - c);
+            let x = (d - b) / (a - c);
             let y = a * x + b;
             Some((x, y))
         } else {
@@ -105,24 +124,28 @@ impl Terrain {
 
     /// determine if the direct route between start and target enter the terrain
     fn has_conflict(&self, direct: Line) -> bool {
-        let mut previous = (0, 0);
-        for point in &self.land {
+        for (previous, next) in zip(&self.land, self.land[1..].iter()) {
             let segment = Line {
-                p0: previous,
-                p1: *point,
+                p0: *previous,
+                p1: *next,
             };
+            if segment.p0.1 == segment.p1.1 {
+                //landing site
+                continue;
+            }
             if let Some((x, y)) = direct.get_intersection(&segment) {
-                if x > f64::min(direct.p0.0 as f64, direct.p1.0 as f64)
-                    && x < f64::max(direct.p0.0 as f64, direct.p1.0 as f64)
+                if x > f64::min(segment.p0.0 as f64, segment.p1.0 as f64)
+                    && x < f64::max(segment.p0.0 as f64, segment.p1.0 as f64)
                 {
                     eprintln!("Debug message... collision detected");
                     eprintln!("Debug message... collision trajectory {:?}", direct);
+                    eprintln!("Debug message... equation {:?}", direct.get_equation());
                     eprintln!("Debug message... collision land {:?}", &segment);
+                    eprintln!("Debug message... equation {:?}", &segment.get_equation());
                     eprintln!("Debug message... coords {:?}", (x, y));
                     return true;
                 }
             }
-            previous = (point.0, point.1);
         }
         false
     }
@@ -173,6 +196,7 @@ enum LandingPhase {
     Direct,
     Horizontal(Direction),
     Landing,
+    Up(Direction), // must go up to pass over a hump
 }
 
 impl Lander {
@@ -196,13 +220,16 @@ impl Lander {
             && (self.x - self.target.0).abs() < 1000
         {
             self.phase = LandingPhase::Landing;
+            eprintln!("Debug message... landing phase {:?}", self.phase);
             return;
         }
         let next_phase = get_landing_phase((self.x, self.height), self.target, terrain);
         match self.phase {
-            LandingPhase::Direct => self.phase = next_phase,
+            LandingPhase::Direct | LandingPhase::Up(_) => self.phase = next_phase,
             LandingPhase::Horizontal(_) => match next_phase {
-                LandingPhase::Direct | LandingPhase::Landing => self.phase = next_phase,
+                LandingPhase::Direct | LandingPhase::Landing | LandingPhase::Up(_) => {
+                    self.phase = next_phase
+                }
                 LandingPhase::Horizontal(_) => {
                     // continue in the same direction
                 }
@@ -212,6 +239,7 @@ impl Lander {
                 self.phase = next_phase
             }
         }
+        eprintln!("Debug message... landing phase {:?}", self.phase);
     }
 
     /// Adjust rotation and thrust to obtain
@@ -234,9 +262,7 @@ impl Lander {
             self.rotation = 0;
             self.thrust = 4;
         } else if self.v_speed > 1 {
-            if self.rotation.abs() < MAX_ROTATION {
-                self.thrust = 0;
-            }
+            self.thrust = 3;
         } else if self.rotation.abs() > MAX_ROTATION {
             self.rotation = match dir {
                 Direction::Left => MAX_ROTATION,
@@ -269,7 +295,7 @@ impl Lander {
         if margin.abs() < 1.1 {
             self.thrust = 4;
         } else {
-            self.thrust = (-self.v_speed / 5) as i32;
+            self.thrust = -self.v_speed / 5;
         }
     }
 
@@ -286,6 +312,11 @@ impl Lander {
             LandingPhase::Landing => {
                 self.thrust = 0;
                 self.rotation = 0;
+            }
+            LandingPhase::Up(dir) => {
+                self.set_horizontal_translation(*dir);
+                self.thrust = 4;
+                self.rotation = self.rotation / 3;
             }
         }
         self.set_limits();
@@ -314,7 +345,7 @@ fn main() {
     io::stdin().read_line(&mut input_line).unwrap();
     let surface_n = parse_input!(input_line, i32); // the number of points used to draw the surface of Mars.
     let mut lander: Lander = Lander::new();
-    for i in 0..surface_n as usize {
+    for _i in 0..surface_n as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.split(' ').collect::<Vec<_>>();
