@@ -25,10 +25,10 @@ fn z_margin(h_speed: i32, height: i32) -> f64 {
 
 /// PID implementation for rotation
 fn get_rotation(h_speed: i32, landing_distance: i32) -> i32 {
-    let k0 = 2;
-    let k1 = 1;
+    let k0 = 4;
+    let k1 = 2;
     let result = k0 * landing_distance / 100 + k1 * h_speed;
-    let max_rotation = 45;
+    let max_rotation = 60;
     eprintln!(
         "Debug message... speed {} distance {} result {}",
         h_speed, landing_distance, result
@@ -297,6 +297,7 @@ impl Lander {
         } else {
             self.thrust = -self.v_speed / 5;
         }
+        self.thrust = self.thrust.min(4).max(0);
     }
 
     /// Set both rotation and thrust depending on landing phase and target
