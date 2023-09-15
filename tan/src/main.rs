@@ -73,18 +73,18 @@ impl Network {
         let src_stop = self
             .stops
             .get(src.into())
-            .expect(format!("stop {} not in network", src).into());
+            .expect(&format!("stop {} not in network", src));
         let dst_stop = self
             .stops
             .get(dst.into())
-            .expect(format!("stop {} not in network", dst).into());
+            .expect(&format!("stop {} not in network", dst));
         let link = Link {
             src: src.into(),
             dst: dst.into(),
-            dist: src_stop.distance(dst_stop),
+            distance: src_stop.distance(dst_stop),
         };
         let destinations = self.links.entry(src.into()).or_insert(Vec::new());
-        if !destination.contains(link) {
+        if !destinations.contains(&link) {
             destinations.push(link);
         }
     }
@@ -126,6 +126,7 @@ fn main() {
         network.add_link(link[0], link[1]);
     }
 
+    dbg!(network);
     // Write an answer using println!("message...");
     // To debug: eprintln!("Debug message...");
 
