@@ -1,7 +1,6 @@
 // https://www.codingame.com/ide/puzzle/tan-network
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::io;
 use std::str::FromStr;
 
@@ -152,7 +151,7 @@ impl Network {
         if let Some(links) = self.links.get(src_id) {
             for link in links {
                 let mut route = Route::default();
-                route.add_link(&link);
+                route.add_link(link);
                 routes.push(route);
             }
         }
@@ -176,21 +175,55 @@ impl Network {
             routes.append(&mut new_routes);
         }
         routes.retain(|r| !r.route.is_empty() && r.route.last().unwrap() == dst_id);
-        return routes;
+        routes
+    }
+
+    /// Build all shortest routes from src_id
+    fn build_all_routes(&self, src_id: &str) -> HashMap<String, Route> {
+        let mut shortest = HashMap::new();
+        shortest.insert(
+            String::from(src_id),
+            Route {
+                route: vec![String::from(src_id)],
+                distance: 0.0,
+            },
+        );
+
+        let mut new_routes = Vec::new();
+        let mut prev_len = 0_usize;
+        while prev_len != shortest.len() {
+            prev_len = shortest.len();
+            dbg!(shortest.len());
+            for route in shortest.values() {
+                let _ = &new_routes.extend(self.extend_route(route.clone()));
+            }
+            for route in &new_routes {
+                let dst = route.route.last().expect("route is not empty");
+                if let Some(current_route) = shortest.get_mut(dst) {
+                    if current_route.distance > route.distance {
+                        *current_route = route.clone(); // TODO use std::mem::copy
+                    }
+                } else {
+                    shortest.insert(String::from(dst), route.clone());
+                }
+            }
+        }
+        shortest
     }
 
     /// get the answer to write.
     fn get_answer(&self, src_id: &str, dst_id: &str) -> String {
-        let mut routes = self.build_routes(src_id, dst_id);
-        if routes.is_empty() {
-            return "IMPOSSIBLE".into();
+        let paths = self.build_all_routes(src_id);
+        match paths.get(dst_id) {
+            None => String::from("IMPOSSIBLE"),
+            Some(route) => {
+                let mut human_readable = Vec::new();
+                for stop_id in &route.route {
+                    human_readable.push(self.stops.get(stop_id).unwrap().name.clone());
+                }
+                human_readable.join("\n")
+            }
         }
-        routes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let mut human_readable = Vec::new();
-        for stop_id in &routes[0].route {
-            human_readable.push(self.stops.get(stop_id).unwrap().name.clone());
-        }
-        return human_readable.join("\n");
     }
 }
 
@@ -209,7 +242,7 @@ fn main() {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let n = parse_input!(input_line, i32);
-    for i in 0..n as usize {
+    for _i in 0..n as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let stop_name = input_line.trim_matches('\n').to_string();
@@ -219,7 +252,7 @@ fn main() {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let m = parse_input!(input_line, i32);
-    for i in 0..m as usize {
+    for _i in 0..m as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let route = input_line.trim_matches('\n').to_string();
