@@ -80,7 +80,7 @@ impl Playground {
                     new_paths.push(new_path);
                 }
             }
-            for path in new_paths {
+            for path in &new_paths {
                 let dst = path.last().expect("contains at least start point");
                 if let Some(current_path) = longests.get_mut(dst) {
                     if current_path.len() < path.len() {
@@ -95,7 +95,8 @@ impl Playground {
         longests
     }
     fn longest_path(&self, start_point: (usize, usize)) -> Vec<(usize, usize)> {
-        let paths: Vec<&Vec<(usize, usize)>> = self.longest_paths(start_point).values().collect();
+        let destinations = self.longest_paths(start_point);
+        let mut paths: Vec<&Vec<(usize, usize)>> = destinations.values().collect();
         if paths.len() == 0 {
             return Vec::new();
         }
@@ -138,7 +139,7 @@ impl Display for Playground {
         for row in &self.ground {
             lines.push(row.into_iter().collect::<String>());
         }
-        Display::fmt(&format!("{}", lines.join("\n")), f)
+        Display::fmt(&lines.join("\n").to_string(), f)
     }
 }
 
@@ -156,20 +157,20 @@ fn main() {
     // '.' : free space
     // '<n>' : trace let by player n
     let mut ground = Playground::new();
-    let mut previous_dir = "UP";
+    let mut previous_dir = String::from("UP");
     let mut fill = false;
 
     loop {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(" ").collect::<Vec<_>>();
+        let inputs = input_line.split(' ').collect::<Vec<_>>();
         let n = parse_input!(inputs[0], usize); // total number of players (2 to 4).
         let p = parse_input!(inputs[1], usize); // your player number (0 to 3).
-                                                //
+
         for i in 0..n {
             let mut input_line = String::new();
             io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(" ").collect::<Vec<_>>();
+            let inputs = input_line.split(' ').collect::<Vec<_>>();
             let x0 = parse_input!(inputs[0], i32); // starting X coordinate of lightcycle (or -1)
             let y0 = parse_input!(inputs[1], i32); // starting Y coordinate of lightcycle (or -1)
             let x1 = parse_input!(inputs[2], i32); // starting X coordinate of lightcycle (can be the same as X0 if you play before this player)
@@ -200,38 +201,30 @@ fn main() {
 
         if fill {
             next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground.ground, true);
-        } else {
-            let mut goal: (usize, usize) = (0, 0);
-            let mut goal_char = '0';
-            if p != 0 {
-                goal_char = '1';
-            }
-            goal = get_coordinates(goal_char, &ground).unwrap();
-            next_step = get_path(players[p], goal, &ground);
-            if players[p].0 <= 0 || players[p].0 >= 19 || players[p].1 <= 0 || players[p].1 >= 29 {
-                fill = true;
-            }
-        }
-        eprintln!(
-            "Debug message... {:?} \t -> {:?} ({})",
-            players[p], next_step, fill
-        );
+            eprintln!(
+                "Debug message... {:?} \t -> {:?} ({})",
+                players[p], next_step, fill
+            );
 
-        if next_step.0 < players[p].0 {
-            previous_dir = "UP";
-            println!("UP");
-        }
-        if next_step.0 > players[p].0 {
-            previous_dir = "DOWN";
-            println!("DOWN");
-        }
-        if next_step.1 < players[p].1 {
-            previous_dir = "LEFT";
-            println!("LEFT");
-        }
-        if next_step.1 > players[p].1 {
-            previous_dir = "RIGHT";
-            println!("RIGHT")
+            if next_step.0 < players[p].0 {
+                previous_dir = "UP".into();
+                println!("UP");
+            }
+            if next_step.0 > players[p].0 {
+                previous_dir = "DOWN".into();
+                println!("DOWN");
+            }
+            if next_step.1 < players[p].1 {
+                previous_dir = "LEFT".into();
+                println!("LEFT");
+            }
+            if next_step.1 > players[p].1 {
+                previous_dir = "RIGHT".into();
+                println!("RIGHT")
+            }
+        } else {
+            previous_dir = ground.next_dir_longest(players[p], previous_dir);
+            println!("{}", previous_dir);
         }
     }
 }
@@ -259,10 +252,10 @@ fn get_neighbours(p: (usize, usize), ground: &Vec<Vec<char>>) -> Vec<(usize, usi
     ];
 
     for (row, col) in coords {
-        if row < 0 || row >= height {
+        if row == 0 || row >= height {
             continue;
         }
-        if col < 0 || col >= width {
+        if col == 0 || col >= width {
             continue;
         }
         if ground[row][col] == '.' {
@@ -311,10 +304,10 @@ fn get_neighbours_fill(
     coords.push((p.0, p.1 - 1));
 
     for (row, col) in coords {
-        if row < 0 || row >= height {
+        if row == 0 || row >= height {
             continue;
         }
-        if col < 0 || col >= width {
+        if col == 0 || col >= width {
             continue;
         }
         if ground[row][col] == '.' {
@@ -372,10 +365,10 @@ fn get_nextstep_fill_rotate(
     let first = (coords[0].0, coords[0].1);
 
     for (row, col) in coords {
-        if row < 0 || row >= height {
+        if row == 0 || row >= height {
             continue;
         }
-        if col < 0 || col >= width {
+        if col == 0 || col >= width {
             continue;
         }
         if ground[row][col] == '.' {
