@@ -2,12 +2,144 @@
 use itertools::iproduct;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Display;
 use std::io;
+
+// TODO: computer longest path (algorithm as in TAN)
 
 macro_rules! parse_input {
     ($x:expr, $t:ident) => {
         $x.trim().parse::<$t>().unwrap()
     };
+}
+
+#[derive(Debug)]
+struct Playground {
+    ground: Vec<Vec<char>>,
+}
+
+impl Playground {
+    fn new() -> Self {
+        Self {
+            ground: vec![vec!['.'; 30_usize]; 20_usize],
+        }
+    }
+
+    fn remove_player(&mut self, player_num: usize) {
+        let height = self.ground.len();
+        let width = self.ground[0].len();
+        let to_delete = player_num.to_string().chars().next().unwrap();
+        for (row, col) in iproduct!(0..height, 0..width) {
+            if self.ground[row][col] == to_delete {
+                self.ground[row][col] = '.';
+            }
+        }
+    }
+
+    fn get_empty_neighbors(&self, point: (usize, usize)) -> Vec<(usize, usize)> {
+        let height = self.ground.len();
+        let width = self.ground[0].len();
+        let mut neighbors = Vec::new();
+        if point.0 > 0 && point.1 > 0 && self.ground[point.0 - 1][point.1 - 1] == '.' {
+            neighbors.push((point.0 - 1, point.1 - 1));
+        }
+        if point.0 > 0 && point.1 < width && self.ground[point.0 - 1][point.1 + 1] == '.' {
+            neighbors.push((point.0 - 1, point.1 + 1));
+        }
+        if point.0 < height && point.1 > 0 && self.ground[point.0 + 1][point.1 - 1] == '.' {
+            neighbors.push((point.0 + 1, point.1 - 1));
+        }
+        if point.0 < height && point.1 < width && self.ground[point.0 + 1][point.1 + 1] == '.' {
+            neighbors.push((point.0 + 1, point.1 + 1));
+        }
+        neighbors
+    }
+
+    /// Get longest path for all reachable destination
+    fn longest_paths(
+        &self,
+        start_point: (usize, usize),
+    ) -> HashMap<(usize, usize), Vec<(usize, usize)>> {
+        let mut longests = HashMap::new();
+        longests.insert(start_point, Vec::new());
+
+        let mut new_paths: Vec<Vec<(usize, usize)>> = Vec::new();
+        let mut modified = true; // has longests been modified
+        while modified {
+            modified = false;
+            for path in longests.values() {
+                let neighbors =
+                    self.get_empty_neighbors(*path.last().expect("contains at least start point"));
+                for neighbor in neighbors {
+                    if path.contains(&neighbor) {
+                        continue;
+                    }
+                    let mut new_path = path.clone();
+                    new_path.push(neighbor);
+                    new_paths.push(new_path);
+                }
+            }
+            for path in new_paths {
+                let dst = path.last().expect("contains at least start point");
+                if let Some(current_path) = longests.get_mut(dst) {
+                    if current_path.len() < path.len() {
+                        *current_path = path.clone();
+                    }
+                } else {
+                    longests.insert(*dst, path.clone());
+                    modified = true;
+                }
+            }
+        }
+        longests
+    }
+    fn longest_path(&self, start_point: (usize, usize)) -> Vec<(usize, usize)> {
+        let paths: Vec<&Vec<(usize, usize)>> = self.longest_paths(start_point).values().collect();
+        if paths.len() == 0 {
+            return Vec::new();
+        }
+        paths.sort_by_key(|x| x.len());
+        (*paths.last().expect("early return if empty")).to_vec()
+    }
+
+    /// get next step in the longest path found
+    fn next_step(&self, start_point: (usize, usize)) -> Option<(usize, usize)> {
+        if let Some(x) = self.longest_path(start_point).get(0) {
+            Some(*x)
+        } else {
+            None
+        }
+    }
+    /// get next direction to follow the longest path found
+    fn next_dir_longest(&self, start_point: (usize, usize), cur_dir: String) -> String {
+        if let Some(step) = self.next_step(start_point) {
+            if step.0 < start_point.0 {
+                return "UP".into();
+            } else if step.0 > start_point.0 {
+                return "DOWN".into();
+            } else if step.1 < start_point.1 {
+                return "LEFT".into();
+            } else if step.1 > start_point.1 {
+                return "RIGHT".into();
+            } else {
+                unreachable!();
+            }
+        } else {
+            cur_dir
+        }
+    }
+}
+
+impl Display for Playground {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut lines: Vec<String> = Vec::new();
+
+        for row in &self.ground {
+            lines.push(row.into_iter().collect::<String>());
+        }
+        Display::fmt(&format!("{}", lines.join("\n")), f)
+    }
 }
 
 /**
@@ -23,7 +155,7 @@ fn main() {
     // playgroung
     // '.' : free space
     // '<n>' : trace let by player n
-    let mut ground = vec![vec!['.'; 30_usize]; 20_usize];
+    let mut ground = Playground::new();
     let mut previous_dir = "UP";
     let mut fill = false;
 
@@ -48,11 +180,11 @@ fn main() {
             );
 
             if x0 == -1 {
-                remove_player(n, &mut ground);
+                ground.remove_player(n);
             } else {
                 players[i] = (y1 as usize, x1 as usize); // row (y) , col (x)
-                ground[y1 as usize][x1 as usize] = i.to_string().chars().next().unwrap();
-                ground[y0 as usize][x0 as usize] = i.to_string().chars().next().unwrap();
+                ground.ground[y1 as usize][x1 as usize] = i.to_string().chars().next().unwrap();
+                ground.ground[y0 as usize][x0 as usize] = i.to_string().chars().next().unwrap();
             }
         }
 
@@ -64,10 +196,10 @@ fn main() {
         //     Some(x) => *x,
         // };
 
-        display_ground(&ground);
+        eprintln!("{}", &ground);
 
         if fill {
-            next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground, true);
+            next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground.ground, true);
         } else {
             let mut goal: (usize, usize) = (0, 0);
             let mut goal_char = '0';
@@ -311,10 +443,4 @@ fn get_coordinates(c: char, ground: &Vec<Vec<char>>) -> Option<(usize, usize)> {
         }
     }
     return None;
-}
-
-fn display_ground(ground: &Vec<Vec<char>>) {
-    for row in ground {
-        eprintln!("Debug Message... {}", row.into_iter().collect::<String>());
-    }
 }
