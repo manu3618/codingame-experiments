@@ -6,8 +6,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::io;
 
-// TODO: computer longest path (algorithm as in TAN)
-
+const MAX_LEN: usize = 30; // maximal length for path search
 macro_rules! parse_input {
     ($x:expr, $t:ident) => {
         $x.trim().parse::<$t>().unwrap()
@@ -38,21 +37,22 @@ impl Playground {
     }
 
     fn get_empty_neighbors(&self, point: (usize, usize)) -> Vec<(usize, usize)> {
-        let height = self.ground.len();
-        let width = self.ground[0].len();
+        let height = self.ground.len() - 1;
+        let width = self.ground[0].len() - 1;
         let mut neighbors = Vec::new();
-        if point.0 > 0 && point.1 > 0 && self.ground[point.0 - 1][point.1 - 1] == '.' {
-            neighbors.push((point.0 - 1, point.1 - 1));
+        if point.0 > 0 && self.ground[point.0 - 1][point.1] == '.' {
+            neighbors.push((point.0 - 1, point.1));
         }
-        if point.0 > 0 && point.1 < width && self.ground[point.0 - 1][point.1 + 1] == '.' {
-            neighbors.push((point.0 - 1, point.1 + 1));
+        if point.1 < width && self.ground[point.0][point.1 + 1] == '.' {
+            neighbors.push((point.0, point.1 + 1));
         }
-        if point.0 < height && point.1 > 0 && self.ground[point.0 + 1][point.1 - 1] == '.' {
-            neighbors.push((point.0 + 1, point.1 - 1));
+        if point.0 < height && self.ground[point.0 + 1][point.1] == '.' {
+            neighbors.push((point.0 + 1, point.1));
         }
-        if point.0 < height && point.1 < width && self.ground[point.0 + 1][point.1 + 1] == '.' {
-            neighbors.push((point.0 + 1, point.1 + 1));
+        if point.1 < width && self.ground[point.0][point.1 + 1] == '.' {
+            neighbors.push((point.0, point.1 + 1));
         }
+
         neighbors
     }
 
@@ -62,7 +62,7 @@ impl Playground {
         start_point: (usize, usize),
     ) -> HashMap<(usize, usize), Vec<(usize, usize)>> {
         let mut longests = HashMap::new();
-        longests.insert(start_point, Vec::new());
+        longests.insert(start_point, vec![start_point]);
 
         let mut new_paths: Vec<Vec<(usize, usize)>> = Vec::new();
         let mut modified = true; // has longests been modified
@@ -82,9 +82,13 @@ impl Playground {
             }
             for path in &new_paths {
                 let dst = path.last().expect("contains at least start point");
+                if path.len() > MAX_LEN {
+                    continue;
+                }
                 if let Some(current_path) = longests.get_mut(dst) {
                     if current_path.len() < path.len() {
                         *current_path = path.clone();
+                        modified = true;
                     }
                 } else {
                     longests.insert(*dst, path.clone());
@@ -101,12 +105,13 @@ impl Playground {
             return Vec::new();
         }
         paths.sort_by_key(|x| x.len());
+        // dbg!(&paths.last());
         (*paths.last().expect("early return if empty")).to_vec()
     }
 
     /// get next step in the longest path found
     fn next_step(&self, start_point: (usize, usize)) -> Option<(usize, usize)> {
-        if let Some(x) = self.longest_path(start_point).get(0) {
+        if let Some(x) = self.longest_path(start_point).get(1) {
             Some(*x)
         } else {
             None
@@ -158,7 +163,7 @@ fn main() {
     // '<n>' : trace let by player n
     let mut ground = Playground::new();
     let mut previous_dir = String::from("UP");
-    let mut fill = false;
+    let mut fill = false; // dextrogyre
 
     loop {
         let mut input_line = String::new();
@@ -199,33 +204,8 @@ fn main() {
 
         eprintln!("{}", &ground);
 
-        if fill {
-            next_step = get_nextstep_fill_rotate(players[p], &previous_dir, &ground.ground, true);
-            eprintln!(
-                "Debug message... {:?} \t -> {:?} ({})",
-                players[p], next_step, fill
-            );
-
-            if next_step.0 < players[p].0 {
-                previous_dir = "UP".into();
-                println!("UP");
-            }
-            if next_step.0 > players[p].0 {
-                previous_dir = "DOWN".into();
-                println!("DOWN");
-            }
-            if next_step.1 < players[p].1 {
-                previous_dir = "LEFT".into();
-                println!("LEFT");
-            }
-            if next_step.1 > players[p].1 {
-                previous_dir = "RIGHT".into();
-                println!("RIGHT")
-            }
-        } else {
-            previous_dir = ground.next_dir_longest(players[p], previous_dir);
-            println!("{}", previous_dir);
-        }
+        previous_dir = ground.next_dir_longest(players[p], previous_dir);
+        println!("{}", previous_dir);
     }
 }
 
