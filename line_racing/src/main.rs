@@ -69,6 +69,50 @@ impl Playground {
         neighbors
     }
 
+    fn longest_dumb_path(&mut self, point: (usize, usize)) -> Vec<Vec<(usize, usize)>> {
+        let mut longest = vec![vec![point]];
+        let mut modified = true; // has longest been modified
+        while modified {
+            // dbg!(&longest.len());
+            modified = false;
+            let mut new_paths: Vec<Vec<(usize, usize)>> = Vec::new();
+            for path in &longest {
+                let neighbors =
+                    self.get_empty_neighbors(*path.last().expect("contains at least start point"));
+                for neighbor in neighbors {
+                    if path.contains(&neighbor) {
+                        continue;
+                    }
+                    let mut new_path = path.clone();
+                    new_path.push(neighbor);
+                    if !longest.contains(&new_path) {
+                        new_paths.push(new_path);
+                        modified = true;
+                    }
+                }
+            }
+            longest.extend(new_paths);
+            if longest.len() > 3000 {
+                break;
+            }
+        }
+        self.paths = longest.clone();
+        longest
+    }
+
+    fn next_dumb_paths(&mut self, start_point: (usize, usize), cur_dir: String) -> String {
+        let tmp = Vec::new();
+        self.longest_dumb_path(start_point);
+        let longest = self.paths.iter().max_by_key(|x| x.len()).unwrap_or(&tmp);
+        // dbg!(self.paths.len());
+        // dbg!(longest.len());
+        if let Some(step) = longest.get(1) {
+            next_dir(start_point, *step).unwrap()
+        } else {
+            cur_dir
+        }
+    }
+
     /// Get longest path for all reachable destination
     fn longest_paths(
         &mut self,
@@ -99,7 +143,7 @@ impl Playground {
                 // if path.len() * longests.len() > MAX_CAP {
                 if longests.len() > MAX_DEST || path.len() > MAX_LEN {
                     longests.insert(*dst, path.clone());
-                    dbg!(path.len(), longests.len());
+                    //dbg!(path.len(), longests.len());
                     self.pathfinding_complete = false;
                     // early retrun
                     self.paths = Vec::new();
@@ -343,8 +387,9 @@ fn main() {
 
         // eprintln!("{}", &ground);
 
-        previous_dir = ground.next_dir_longest(players[p], previous_dir);
+        // previous_dir = ground.next_dir_longest(players[p], previous_dir);
         // previous_dir = ground.next_most_paths(players[p], previous_dir);
+        previous_dir = ground.next_dumb_paths(players[p], previous_dir);
         println!("{}", previous_dir);
     }
 }
