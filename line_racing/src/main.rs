@@ -1,4 +1,5 @@
 // https://www.codingame.com/ide/puzzle/line-racing
+// https://www.codingame.com/ide/puzzle/tron-battle
 use itertools::iproduct;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -6,8 +7,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::io;
 
-const MAX_LEN: usize = 100; // maximal length for path search
-const MAX_DEST: usize = 150; // maximal number of destinations to compute
+const MAX_LEN: usize = 50; // maximal length for path search
+const MAX_DEST: usize = 100; // maximal number of destinations to compute
 
 macro_rules! parse_input {
     ($x:expr, $t:ident) => {
@@ -15,10 +16,17 @@ macro_rules! parse_input {
     };
 }
 
+#[derive(Debug, Default)]
+struct Path(Vec<(usize, usize)>);
+
+#[derive(Debug, Default)]
+struct PathCollection(Vec<Vec<(usize, usize)>>);
+
 #[derive(Debug)]
 struct Playground {
     ground: Vec<Vec<char>>,
     pathfinding_complete: bool,
+    paths: Vec<Vec<(usize, usize)>>,
 }
 
 impl Playground {
@@ -26,6 +34,7 @@ impl Playground {
         Self {
             ground: vec![vec!['.'; 30_usize]; 20_usize],
             pathfinding_complete: false,
+            paths: Vec::new(),
         }
     }
 
@@ -92,6 +101,11 @@ impl Playground {
                     longests.insert(*dst, path.clone());
                     dbg!(path.len(), longests.len());
                     self.pathfinding_complete = false;
+                    // early retrun
+                    self.paths = Vec::new();
+                    for path in longests.values() {
+                        self.paths.push(path.to_vec());
+                    }
                     return longests;
                 }
                 if let Some(current_path) = longests.get_mut(dst) {
@@ -106,13 +120,17 @@ impl Playground {
             }
         }
         self.pathfinding_complete = true;
+        self.paths = Vec::new();
+        for path in longests.values() {
+            self.paths.push(path.to_vec());
+        }
         longests
     }
 
     fn longest_path(&mut self, start_point: (usize, usize)) -> Vec<(usize, usize)> {
         let destinations = self.longest_paths(start_point);
         let mut paths: Vec<&Vec<(usize, usize)>> = destinations.values().collect();
-        if paths.len() == 0 {
+        if paths.is_empty() {
             return Vec::new();
         }
         paths.sort_by_cached_key(|x| x.len());
@@ -124,29 +142,68 @@ impl Playground {
 
     /// get next step in the longest path found
     fn next_step(&mut self, start_point: (usize, usize)) -> Option<(usize, usize)> {
-        if let Some(x) = self.longest_path(start_point).get(1) {
-            Some(*x)
+        self.longest_path(start_point).get(1).copied()
+    }
+
+    fn path_by_next_hop(&mut self) -> HashMap<(usize, usize), Vec<Vec<(usize, usize)>>> {
+        let mut paths = HashMap::new();
+        for path in &self.paths {
+            if let Some(first_hope) = path.get(1) {
+                let d = paths.entry(*first_hope).or_insert(Vec::new());
+                d.push(path.clone());
+            }
+        }
+        paths
+    }
+
+    fn next_most_paths(&mut self, start_point: (usize, usize), cur_dir: String) -> String {
+        self.longest_paths(start_point);
+        let paths = self.path_by_next_hop();
+        let entry = paths.iter().max_by_key(|(_, v)| v.len());
+        if let Some((step, _)) = entry {
+            next_dir(start_point, *step).unwrap()
         } else {
-            None
+            cur_dir
         }
     }
+
     /// get next direction to follow the longest path found
     fn next_dir_longest(&mut self, start_point: (usize, usize), cur_dir: String) -> String {
         if let Some(mut step) = self.next_step(start_point) {
             if !self.pathfinding_complete {
-                step = self.next_step_fill(start_point, &cur_dir);
+                let candidate = self.next_step_fill(start_point, &cur_dir);
+                let paths = self.path_by_next_hop();
+                // entry with longest path
+                let entry = paths
+                    .iter()
+                    .max_by_key(|(_, v)| v.iter().max_by_key(|p| p.len()))
+                    .unwrap();
+                let max_len = self
+                    .paths
+                    .iter()
+                    .max_by_key(|x| x.len())
+                    .unwrap_or(&Vec::new())
+                    .len();
+
+                if let Some(p) = paths.get(&candidate) {
+                    let cur_max_len = p
+                        .iter()
+                        .max_by_key(|x| x.len())
+                        .unwrap_or(&Vec::new())
+                        .len();
+                    if max_len > cur_max_len / 2 {
+                        step = candidate;
+                        dbg!("OK");
+                    } else {
+                        step = *entry.0;
+                        dbg!("path too short");
+                    }
+                } else {
+                    step = *entry.0;
+                    dbg!("no path");
+                }
             }
-            if step.0 < start_point.0 {
-                return "UP".into();
-            } else if step.0 > start_point.0 {
-                return "DOWN".into();
-            } else if step.1 < start_point.1 {
-                return "LEFT".into();
-            } else if step.1 > start_point.1 {
-                return "RIGHT".into();
-            } else {
-                unreachable!();
-            }
+            next_dir(start_point, step).unwrap()
         } else {
             cur_dir
         }
@@ -155,43 +212,42 @@ impl Playground {
     fn next_step_fill(&self, p: (usize, usize), cur_dir: &str) -> (usize, usize) {
         let height = self.ground.len();
         let width = self.ground[0].len();
-        let coords: Vec<(usize, usize)>;
         let dextrogyre = true;
 
-        match (cur_dir, dextrogyre) {
+        let coords: Vec<(usize, usize)> = match (cur_dir, dextrogyre) {
             ("LEFT", true) => {
-                coords = vec![(p.0 + 1, p.1), (p.0, p.1 - 1), (p.0 - 1, p.1)];
+                vec![(p.0 + 1, p.1), (p.0, p.1 - 1), (p.0 - 1, p.1)]
             }
             ("LEFT", false) => {
-                coords = vec![(p.0 - 1, p.1), (p.0, p.1 - 1), (p.0 + 1, p.1)];
+                vec![(p.0 - 1, p.1), (p.0, p.1 - 1), (p.0 + 1, p.1)]
             }
             ("UP", true) => {
-                coords = vec![(p.0, p.1 - 1), (p.0 - 1, p.1), (p.0, p.1 + 1)];
+                vec![(p.0, p.1 - 1), (p.0 - 1, p.1), (p.0, p.1 + 1)]
             }
             ("UP", false) => {
-                coords = vec![(p.0, p.1 + 1), (p.0 - 1, p.1), (p.0, p.1 - 1)];
+                vec![(p.0, p.1 + 1), (p.0 - 1, p.1), (p.0, p.1 - 1)]
             }
             ("RIGHT", true) => {
-                coords = vec![(p.0 - 1, p.1), (p.0, p.1 + 1), (p.0 + 1, p.1)];
+                vec![(p.0 - 1, p.1), (p.0, p.1 + 1), (p.0 + 1, p.1)]
             }
             ("RIGHT", false) => {
-                coords = vec![(p.0 + 1, p.1), (p.0, p.1 + 1), (p.0 - 1, p.1)];
+                vec![(p.0 + 1, p.1), (p.0, p.1 + 1), (p.0 - 1, p.1)]
             }
             ("DOWN", true) => {
-                coords = vec![(p.0, p.1 + 1), (p.0 + 1, p.1), (p.0, p.1 - 1)];
+                vec![(p.0, p.1 + 1), (p.0 + 1, p.1), (p.0, p.1 - 1)]
             }
             ("DOWN", false) => {
-                coords = vec![(p.0, p.1 + 1), (p.0 + 1, p.1), (p.0, p.1 - 1)];
+                vec![(p.0, p.1 + 1), (p.0 + 1, p.1), (p.0, p.1 - 1)]
             }
             _ => {
-                coords = vec![
+                vec![
                     (p.0 + 1, p.1),
                     (p.0 - 1, p.1),
                     (p.0, p.1 + 1),
                     (p.0, p.1 - 1),
-                ];
+                ]
             }
-        }
+        };
         let first = (coords[0].0, coords[0].1);
 
         for (row, col) in coords {
@@ -207,7 +263,7 @@ impl Playground {
                 return (row, col);
             }
         }
-        return first;
+        first
     }
 }
 
@@ -216,9 +272,24 @@ impl Display for Playground {
         let mut lines: Vec<String> = Vec::new();
 
         for row in &self.ground {
-            lines.push(row.into_iter().collect::<String>());
+            lines.push(row.iter().collect::<String>());
         }
         Display::fmt(&lines.join("\n"), f)
+    }
+}
+
+/// Return next direction
+fn next_dir(start_point: (usize, usize), next_point: (usize, usize)) -> Option<String> {
+    if next_point.0 < start_point.0 {
+        Some("UP".into())
+    } else if next_point.0 > start_point.0 {
+        Some("DOWN".into())
+    } else if next_point.1 < start_point.1 {
+        Some("LEFT".into())
+    } else if next_point.1 > start_point.1 {
+        Some("RIGHT".into())
+    } else {
+        None
     }
 }
 
@@ -273,6 +344,7 @@ fn main() {
         // eprintln!("{}", &ground);
 
         previous_dir = ground.next_dir_longest(players[p], previous_dir);
+        // previous_dir = ground.next_most_paths(players[p], previous_dir);
         println!("{}", previous_dir);
     }
 }
@@ -392,12 +464,12 @@ fn get_path(
                     }
                 }
             }
-            if next_neighbours.len() > 0 {
+            if !next_neighbours.is_empty() {
                 reached.extend(next_neighbours.as_slice());
             }
         }
     }
-    return candidate_hop[0];
+    candidate_hop[0]
 }
 
 fn get_coordinates(c: char, ground: &Vec<Vec<char>>) -> Option<(usize, usize)> {
@@ -411,5 +483,5 @@ fn get_coordinates(c: char, ground: &Vec<Vec<char>>) -> Option<(usize, usize)> {
             return Some((row, col));
         }
     }
-    return None;
+    None
 }
