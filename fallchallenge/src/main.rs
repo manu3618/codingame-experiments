@@ -1,7 +1,77 @@
+// https://www.codingame.com/ide/challenge/fall-challenge-2023
+
+use std::collections::HashMap;
 use std::io;
+use std::str::FromStr;
 
 macro_rules! parse_input {
-    ($x:expr, $t:ident) => ($x.trim().parse::<$t>().unwrap())
+    ($x:expr, $t:ident) => {
+        $x.trim().parse::<$t>().unwrap()
+    };
+}
+
+#[derive(Debug)]
+struct Drone {
+    position: (u32, u32),
+    battery: u32,
+}
+
+#[derive(Debug, Default)]
+struct Creature {
+    id: u8,
+    creature_type: u8,
+    color: u8,
+    position: (i32, i32),
+    velocity: (i32, i32),
+}
+
+impl Creature {
+    fn set_id(self, id: u8) -> Self {
+        Self { id: id, ..self }
+    }
+    fn set_type(self, creature_type: u8) -> Self {
+        Self {
+            creature_type: creature_type,
+            ..self
+        }
+    }
+    fn set_color(self, color: u8) -> Self {
+        Self {
+            color: color,
+            ..self
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ParseCreatureError;
+
+impl FromStr for Creature {
+    type Err = ParseCreatureError;
+    fn from_str(s: &str) -> Result<Creature, ParseCreatureError> {
+        let fields = s.trim().split(" ").collect::<Vec<_>>();
+        dbg!(&fields);
+        if fields.len() != 3 {
+            return Err(ParseCreatureError);
+        }
+        let mut creature = Creature::default();
+        if let Ok(id) = str::parse(fields[0]) {
+            creature.id = id;
+        } else {
+            return Err(ParseCreatureError);
+        }
+        if let Ok(t) = str::parse(fields[1]) {
+            creature.creature_type = t;
+        } else {
+            return Err(ParseCreatureError);
+        }
+        if let Ok(color) = str::parse(fields[2]) {
+            creature.color = color;
+        } else {
+            return Err(ParseCreatureError);
+        }
+        Ok(creature)
+    }
 }
 
 /**
@@ -9,16 +79,16 @@ macro_rules! parse_input {
  **/
 fn main() {
     let mut input_line = String::new();
+    let mut creatures: HashMap<u8, Creature> = HashMap::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let creature_count = parse_input!(input_line, i32);
-    for i in 0..creature_count as usize {
+    for _ in 0..creature_count as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(" ").collect::<Vec<_>>();
-        let creature_id = parse_input!(inputs[0], i32);
-        let color = parse_input!(inputs[1], i32);
-        let _type = parse_input!(inputs[2], i32);
+        let creature: Creature = input_line.parse().unwrap();
+        creatures.insert(creature.id, creature);
     }
+    dbg!(&creatures);
 
     // game loop
     loop {
@@ -105,7 +175,6 @@ fn main() {
             let radar = inputs[2].trim().to_string();
         }
         for i in 0..my_drone_count as usize {
-
             // Write an action using println!("message...");
             // To debug: eprintln!("Debug message...");
 
