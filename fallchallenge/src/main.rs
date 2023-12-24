@@ -12,8 +12,21 @@ macro_rules! parse_input {
 }
 
 #[derive(Debug, Default)]
+enum Phase {
+    /// trying to capture a creature
+    Capturing,
+    /// trying to explore as much space as possible
+    Exploring,
+    Diving,
+    /// trying to save points
+    #[default]
+    Surfacing,
+}
+
+#[derive(Debug, Default)]
 struct Drone {
     id: u8,
+    phase: Phase,
     position: (u32, u32),
     emergency: u8,
     battery: u32,
@@ -25,6 +38,15 @@ impl Drone {
     }
     fn distance(&self, position: (u32, u32)) -> u32 {
         distance(self.position, position)
+    }
+    fn get_command(&self, creatures: &HashMap<u8, Creature>) -> String {
+        let light = "0"; // TODO
+        match &self.phase {
+            Phase::Capturing => format!("WAIT {light}"), // TODO
+            Phase::Exploring => format!("WAIT {light}"), // TODO
+            Phase::Diving => format!("WAIT {light}"),
+            Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
+        }
     }
 }
 
