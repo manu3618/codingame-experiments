@@ -42,13 +42,49 @@ impl Drone {
     fn distance(&self, position: (u32, u32)) -> u32 {
         distance(self.position, position)
     }
-    fn get_command(&self, creatures: &HashMap<u8, Creature>) -> String {
+    fn get_command(&self, creatures: &HashMap<u8, Creature>, grid: &mut Vec<(u32, u32)>) -> String {
+        // let light = match nearest {
+        //     Some(cid) => {
+        //         let position = creatures[&cid].position;
+        //         match self.distance(position) {
+        //             0..=2000 => 1,
+        //             _ => rand::thread_rng().gen_range(0..=1),
+        //         }
+        //     }
+        //     _ => rand::thread_rng().gen_range(0..=1),
+        // };
         let light = "0"; // TODO
         match &self.phase {
             Phase::Capturing => format!("WAIT {light}"), // TODO
-            Phase::Exploring => format!("WAIT {light}"), // TODO
+            Phase::Exploring => {
+                if let Some((a, b)) = self.get_exploration_move(grid) {
+                    format!("MOVE {a} {b} {light}")
+                } else {
+                    format!("WAIT 1")
+                }
+            }
+
             Phase::Diving => format!("WAIT {light}"),
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
+        }
+    }
+
+    fn get_exploration_move(&self, grid: &mut Vec<(u32, u32)>) -> Option<(u32, u32)> {
+        if grid.is_empty() {
+            None
+        } else {
+            if let Some(p) = &grid
+                .into_iter()
+                .map(|a| (a, distance(self.position, *a)))
+                .min_by_key(|e| e.1)
+            {
+                if p.1 < 500 {
+                    &grid.retain(|a| distance(self.position, *a) > 500);
+                };
+                Some(*p.0)
+            } else {
+                None
+            }
         }
     }
 }
@@ -267,6 +303,35 @@ where
         .copied()
 }
 
+fn get_exploration_grid() -> Vec<(u32, u32)> {
+    let h_step = 450;
+    let v_step = h_step + h_step / 2;
+    let max_h = 10_000;
+    let max_v = 10_000;
+    let mut grid: Vec<(u32, u32)> = iproduct!(
+        (0..(max_h / h_step)).step_by(h_step),
+        (0..(max_v / v_step)).step_by(v_step)
+    )
+    .map(|(a, b)| (a as u32, b as u32))
+    .collect::<Vec<_>>();
+
+    // left transitions
+    grid.append(
+        &mut (0..(max_v / (v_step * 2)))
+            .step_by(2 * v_step) // 1 line in 2
+            .map(|y| (0, (y as u32 + v_step as u32 / 2))) //shifted by v_step / 2
+            .collect::<Vec<_>>(),
+    );
+    // right transitions
+    grid.append(
+        &mut (0..((max_v / (v_step * 2)) - 1))
+            .step_by(2 * v_step) // 1 line in 2
+            .map(|y| (max_h as u32, (y as u32 + 3 * v_step as u32 / 2)))
+            .collect::<Vec<_>>(),
+    );
+    grid
+}
+
 fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u8, Creature>) {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -362,6 +427,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
  * Score points by scanning valuable fish faster than your opponent.
  **/
 fn main() {
+    let mut exploration_grid = get_exploration_grid();
     let mut input_line = String::new();
     let mut creatures: HashMap<u8, Creature> = HashMap::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -378,10 +444,6 @@ fn main() {
     // game loop
     loop {
         parse_game_input(&mut me, &mut foe, &mut creatures);
-        let nearest = me
-            .get_update_nearest_creature(&mut creatures)
-            .map(|(_, n)| n);
-
         // To ignore
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
@@ -396,22 +458,14 @@ fn main() {
         }
 
         for d in me.drones.values() {
+            let nearest = me
+                .get_update_nearest_creature(&mut creatures)
+                .map(|(_, n)| n);
+
             // Write an action using println!("message...");
             // To debug: eprintln!("Debug message...");
             // println!("WAIT 1"); // MOVE <x> <y> <light (1|0)> | WAIT <light (1|0)>
-            match nearest {
-                Some(cid) => {
-                    let position = creatures[&cid].position;
-                    let light = match d.distance(position) {
-                        0..=2000 => 1,
-                        _ => rand::thread_rng().gen_range(0..=1),
-                    };
-                    println!("MOVE {} {} {}", position.0, position.1, light);
-                }
-                _ => {
-                    println!("WAIT 1");
-                }
-            }
+            println!("{}", d.get_command(&creatures, &mut exploration_grid))
         }
     }
 }
