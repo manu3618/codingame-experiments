@@ -1,7 +1,9 @@
 // https://www.codingame.com/ide/challenge/fall-challenge-2023
 use itertools::iproduct;
+use itertools::Itertools;
 use rand::Rng;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io;
 use std::str::FromStr;
 
@@ -30,6 +32,7 @@ struct Drone {
     position: (u32, u32),
     emergency: u8,
     battery: u32,
+    scanned_unsaved_creature: HashSet<u8>,
 }
 
 impl Drone {
@@ -51,39 +54,39 @@ impl Drone {
 }
 
 #[derive(Debug)]
-struct ParseDroneError;
+struct ParseDroneError(String);
 
 impl FromStr for Drone {
     type Err = ParseDroneError;
     fn from_str(s: &str) -> Result<Drone, ParseDroneError> {
         let fields = s.trim().split(' ').collect::<Vec<_>>();
         if fields.len() != 5 {
-            return Err(ParseDroneError);
+            return Err(ParseDroneError(s.into()));
         }
         let mut drone = Drone::default();
         if let Ok(id) = str::parse(fields[0]) {
             drone.id = id;
         } else {
-            return Err(ParseDroneError);
+            return Err(ParseDroneError(s.into()));
         }
         if let Ok(x) = str::parse(fields[1]) {
             if let Ok(y) = str::parse(fields[2]) {
                 drone.position = (x, y);
             } else {
-                return Err(ParseDroneError);
+                return Err(ParseDroneError(s.into()));
             }
         } else {
-            return Err(ParseDroneError);
+            return Err(ParseDroneError(s.into()));
         }
         if let Ok(emergency) = str::parse(fields[3]) {
             drone.emergency = emergency;
         } else {
-            return Err(ParseDroneError);
+            return Err(ParseDroneError(s.into()));
         }
         if let Ok(battery) = str::parse(fields[4]) {
             drone.battery = battery;
         } else {
-            return Err(ParseDroneError);
+            return Err(ParseDroneError(s.into()));
         }
         Ok(drone)
     }
@@ -186,8 +189,8 @@ fn distance(a: (u32, u32), b: (u32, u32)) -> u32 {
 struct Player {
     score: u32,
     drones: HashMap<u8, Drone>,
-    /// creature ids
-    creatures: Vec<u8>,
+    /// all scanned cretures, including those already saved
+    creatures: HashSet<u8>,
 }
 
 impl Player {
@@ -197,12 +200,8 @@ impl Player {
         &self,
         creatures: &HashMap<u8, Creature>,
     ) -> Option<(u8, u8)> {
-        get_nearest_drone_creature(
-            self.drones.values(),
-            creatures.values(),
-            self.creatures.clone(),
-        )
-        .map(|(a, b, _)| (a, b))
+        get_nearest_drone_creature(self.drones.values(), creatures.values(), &self.creatures)
+            .map(|(a, b, _)| (a, b))
     }
 
     /// Get nearest creature.
@@ -214,11 +213,8 @@ impl Player {
     ) -> Option<(u8, u8)> {
         let threshold = 500;
         let mut max_iter = 10;
-        let mut nearest = get_nearest_drone_creature(
-            self.drones.values(),
-            creatures.values(),
-            self.creatures.clone(),
-        );
+        let mut nearest =
+            get_nearest_drone_creature(self.drones.values(), creatures.values(), &self.creatures);
 
         while let Some(n) = nearest {
             if n.2 > threshold {
@@ -235,7 +231,7 @@ impl Player {
                 nearest = get_nearest_drone_creature(
                     self.drones.values(),
                     creatures.values(),
-                    self.creatures.clone(),
+                    &self.creatures,
                 );
             }
             if max_iter < 1 {
@@ -250,7 +246,7 @@ impl Player {
 fn get_nearest_drone_creature<'a, D, C>(
     drones: D,
     creatures: C,
-    excluded: Vec<u8>,
+    excluded: &HashSet<u8>,
 ) -> Option<(u8, u8, u32)>
 where
     D: Iterator<Item = &'a Drone>,
@@ -278,15 +274,15 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     foe.score = parse_input!(input_line, u32);
-    me.creatures.truncate(0);
-    foe.creatures.truncate(0);
+    me.creatures.clear();
+    foe.creatures.clear();
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let my_scan_count = parse_input!(input_line, usize);
     for _ in 0..my_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        me.creatures.push(parse_input!(input_line, u8));
+        me.creatures.insert(parse_input!(input_line, u8));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -294,7 +290,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
     for _ in 0..foe_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        foe.creatures.push(parse_input!(input_line, u8));
+        foe.creatures.insert(parse_input!(input_line, u8));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -317,11 +313,29 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
-    let drone_scan_count = parse_input!(input_line, i32);
-    for _ in 0..drone_scan_count as usize {
+    let drone_scan_count = parse_input!(input_line, usize);
+    for _ in 0..drone_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        foe.creatures.push(parse_input!(input_line, u8));
+        dbg!(&input_line);
+        let line = input_line.trim().split(' ').collect::<Vec<_>>();
+        let drone_id = line[0].parse::<u8>().unwrap();
+        let creature_id = line[0].parse::<u8>().unwrap();
+        if me.drones.keys().contains(&drone_id) {
+            me.creatures.insert(creature_id);
+            me.drones
+                .get_mut(&drone_id)
+                .unwrap()
+                .scanned_unsaved_creature
+                .insert(creature_id);
+        } else {
+            foe.creatures.insert(creature_id);
+            foe.drones
+                .get_mut(&drone_id)
+                .unwrap()
+                .scanned_unsaved_creature
+                .insert(creature_id);
+        }
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
