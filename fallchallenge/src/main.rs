@@ -1,6 +1,6 @@
 // https://www.codingame.com/ide/challenge/fall-challenge-2023
 use itertools::iproduct;
-use itertools::Itertools;
+// use itertools::Itertools;
 use rand::Rng;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -19,10 +19,11 @@ enum Phase {
     Capturing,
     /// trying to explore as much space as possible
     Exploring,
+    #[default]
     Diving,
     /// trying to save points
-    #[default]
     Surfacing,
+    Debug,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +43,12 @@ impl Drone {
     fn distance(&self, position: (u32, u32)) -> u32 {
         distance(self.position, position)
     }
-    fn get_command(&self, creatures: &HashMap<u8, Creature>, grid: &mut Vec<(u32, u32)>) -> String {
+    fn get_command(
+        &mut self,
+        creatures: &HashMap<u8, Creature>,
+        grid: &mut Vec<(u32, u32)>,
+    ) -> String {
+        eprintln!("getting command for {} ({:?})", &self.id, &self.phase);
         // let light = match nearest {
         //     Some(cid) => {
         //         let position = creatures[&cid].position;
@@ -53,39 +59,78 @@ impl Drone {
         //     }
         //     _ => rand::thread_rng().gen_range(0..=1),
         // };
-        let light = "0"; // TODO
+        dbg!(self.scanned_unsaved_creature.len());
+        if self.scanned_unsaved_creature.len() > 3 {
+            self.phase = Phase::Surfacing;
+        }
+        if self.position.1 < 500 {
+            self.scanned_unsaved_creature.clear();
+            self.phase = Phase::Exploring;
+        }
+        let mut light = rand::thread_rng().gen_range(0..=1);
+        if self.battery < 10 {
+            light = 0;
+        }
         match &self.phase {
-            Phase::Capturing => format!("WAIT {light}"), // TODO
+            Phase::Capturing => {
+                if let Some((a, b)) = self.get_exploration_move(grid) {
+                    if self.distance((a, b)) < 2000 {
+                        light = 1;
+                    }
+                    format!("MOVE {a} {b} {light}")
+                } else {
+                    self.phase = Phase::Diving;
+                    self.get_command(creatures, grid)
+                }
+            }
             Phase::Exploring => {
+                dbg!(grid.len());
                 if let Some((a, b)) = self.get_exploration_move(grid) {
                     format!("MOVE {a} {b} {light}")
                 } else {
-                    format!("WAIT 1")
+                    self.phase = Phase::Capturing;
+                    self.get_command(creatures, grid)
                 }
             }
-
-            Phase::Diving => format!("WAIT {light}"),
+            Phase::Diving => {
+                if self.position.1 > 9500 {
+                    self.phase = Phase::Exploring;
+                }
+                format!("WAIT {light}")
+            }
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
+            Phase::Debug => format!("MOVE {} {} 0", self.position.0, self.position.1 + 10),
         }
     }
 
     fn get_exploration_move(&self, grid: &mut Vec<(u32, u32)>) -> Option<(u32, u32)> {
+        let threshold = 2000;
         if grid.is_empty() {
             None
+        } else if let Some(p) = &grid
+            .clone()
+            .iter()
+            .map(|a| (a, distance(self.position, *a)))
+            .min_by_key(|e| e.1)
+        {
+            if p.1 < threshold {
+                grid.retain(|a| distance(self.position, *a) > threshold);
+            };
+            Some(*p.0)
         } else {
-            if let Some(p) = &grid
-                .into_iter()
-                .map(|a| (a, distance(self.position, *a)))
-                .min_by_key(|e| e.1)
-            {
-                if p.1 < 500 {
-                    &grid.retain(|a| distance(self.position, *a) > 500);
-                };
-                Some(*p.0)
-            } else {
-                None
-            }
+            None
         }
+    }
+    fn combine(&mut self, other: &Drone) {
+        self.position = other.position;
+        self.emergency = other.emergency;
+        self.battery = other.battery;
+    }
+}
+
+impl PartialEq for Drone {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 
@@ -164,7 +209,11 @@ impl Default for Creature {
         }
     }
 }
-
+impl PartialEq for Creature {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
 #[derive(Debug)]
 struct ParseCreatureError;
 
@@ -224,7 +273,7 @@ fn distance(a: (u32, u32), b: (u32, u32)) -> u32 {
 #[derive(Debug, Default)]
 struct Player {
     score: u32,
-    drones: HashMap<u8, Drone>,
+    drones: Vec<Drone>,
     /// all scanned cretures, including those already saved
     creatures: HashSet<u8>,
 }
@@ -236,8 +285,13 @@ impl Player {
         &self,
         creatures: &HashMap<u8, Creature>,
     ) -> Option<(u8, u8)> {
-        get_nearest_drone_creature(self.drones.values(), creatures.values(), &self.creatures)
-            .map(|(a, b, _)| (a, b))
+        get_nearest_drone_creature(
+            //self.drones.iter().map(|d| d),
+            self.drones.iter(),
+            creatures.values(),
+            &self.creatures,
+        )
+        .map(|(a, b, _)| (a, b))
     }
 
     /// Get nearest creature.
@@ -250,22 +304,23 @@ impl Player {
         let threshold = 500;
         let mut max_iter = 10;
         let mut nearest =
-            get_nearest_drone_creature(self.drones.values(), creatures.values(), &self.creatures);
+            get_nearest_drone_creature(self.drones.iter(), creatures.values(), &self.creatures);
 
         while let Some(n) = nearest {
             if n.2 > threshold {
                 return Some((n.0, n.1));
             } else {
-                dbg!(&creatures[&n.1]);
+                // dbg!(&creatures[&n.1]);
                 if let Some(c) = creatures.get_mut(&n.1) {
                     c.position = (
                         rand::thread_rng().gen_range(1..=10000),
                         rand::thread_rng().gen_range(1..=10000),
                     );
                 }
-                dbg!(&creatures[&n.1]);
+                // dbg!(&creatures[&n.1]);
                 nearest = get_nearest_drone_creature(
-                    self.drones.values(),
+                    // self.drones.iter().map(|d| d),
+                    self.drones.iter(),
                     creatures.values(),
                     &self.creatures,
                 );
@@ -276,6 +331,19 @@ impl Player {
             max_iter -= 1;
         }
         None
+    }
+
+    /// update drone if contained by the player, otherwiseadd it.
+    fn update_drone(&mut self, drone: Drone) {
+        // dbg!(&self.drones);
+        let index = &self.drones.iter().position(|d| d == &drone);
+        match index {
+            Some(idx) => {
+                let old = self.drones.get_mut(*idx).unwrap();
+                old.combine(&drone);
+            }
+            None => self.drones.push(drone),
+        }
     }
 }
 
@@ -304,31 +372,29 @@ where
 }
 
 fn get_exploration_grid() -> Vec<(u32, u32)> {
-    let h_step = 450;
+    let h_step = 850;
     let v_step = h_step + h_step / 2;
-    let max_h = 10_000;
-    let max_v = 10_000;
-    let mut grid: Vec<(u32, u32)> = iproduct!(
-        (0..(max_h / h_step)).step_by(h_step),
-        (0..(max_v / v_step)).step_by(v_step)
-    )
-    .map(|(a, b)| (a as u32, b as u32))
-    .collect::<Vec<_>>();
+    let max_h = 10000;
+    let max_v = 10000;
+    let mut grid: Vec<(u32, u32)> =
+        iproduct!((0..max_h).step_by(h_step), (v_step..max_v).step_by(v_step))
+            .map(|(a, b)| (a as u32, b as u32))
+            .collect::<Vec<_>>();
 
     // left transitions
-    grid.append(
-        &mut (0..(max_v / (v_step * 2)))
+    grid.extend(
+        (0..max_v)
             .step_by(2 * v_step) // 1 line in 2
-            .map(|y| (0, (y as u32 + v_step as u32 / 2))) //shifted by v_step / 2
-            .collect::<Vec<_>>(),
+            .map(|y| (0, (y as u32 + v_step as u32 / 2))), //shifted by v_step / 2
     );
+
     // right transitions
-    grid.append(
-        &mut (0..((max_v / (v_step * 2)) - 1))
+    grid.extend(
+        (0..max_v)
             .step_by(2 * v_step) // 1 line in 2
-            .map(|y| (max_h as u32, (y as u32 + 3 * v_step as u32 / 2)))
-            .collect::<Vec<_>>(),
+            .map(|y| (max_h as u32, (y as u32 + 3 * v_step as u32 / 2))),
     );
+
     grid
 }
 
@@ -336,79 +402,84 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     me.score = parse_input!(input_line, u32);
+    // dbg!(format!("me.score {input_line}"));
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     foe.score = parse_input!(input_line, u32);
+    //dbg!(format!("foe.score {input_line}"));
     me.creatures.clear();
     foe.creatures.clear();
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let my_scan_count = parse_input!(input_line, usize);
+    // dbg!(format!("my scan count {input_line}"));
     for _ in 0..my_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         me.creatures.insert(parse_input!(input_line, u8));
+        //   dbg!(format!("creature id {input_line}"));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let foe_scan_count = parse_input!(input_line, usize);
+    //dbg!(format!("foe scan count {input_line}"));
     for _ in 0..foe_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         foe.creatures.insert(parse_input!(input_line, u8));
+        //dbg!(format!("creature id {input_line}"));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let my_drone_count = parse_input!(input_line, usize);
+    //dbg!(format!("my drone count {input_line}"));
     for _ in 0..my_drone_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let drone: Drone = input_line.parse().unwrap();
-        me.drones.insert(drone.id, drone);
+        me.update_drone(drone);
+        //dbg!(format!("drone {input_line}"));
     }
 
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let foe_drone_count = parse_input!(input_line, usize);
+    //dbg!(format!("foe drone count {input_line}"));
     for _ in 0..foe_drone_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let drone: Drone = input_line.parse().unwrap();
-        foe.drones.insert(drone.id, drone);
+        foe.update_drone(drone);
+        //dbg!(format!("drone {input_line}"));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let drone_scan_count = parse_input!(input_line, usize);
+    //dbg!(format!("my drone count {input_line}"));
     for _ in 0..drone_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        dbg!(&input_line);
+        // dbg!(format!("drone id, creature id {input_line}"));
         let line = input_line.trim().split(' ').collect::<Vec<_>>();
         let drone_id = line[0].parse::<u8>().unwrap();
         let creature_id = line[0].parse::<u8>().unwrap();
-        if me.drones.keys().contains(&drone_id) {
-            me.creatures.insert(creature_id);
-            me.drones
-                .get_mut(&drone_id)
-                .unwrap()
-                .scanned_unsaved_creature
-                .insert(creature_id);
-        } else {
-            foe.creatures.insert(creature_id);
-            foe.drones
-                .get_mut(&drone_id)
-                .unwrap()
-                .scanned_unsaved_creature
-                .insert(creature_id);
+        if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
+            drone.scanned_unsaved_creature.insert(creature_id);
+        }
+        // dbg!(&me.drones);
+        if let Some(drone) = foe.drones.iter_mut().find(|d| d.id == drone_id) {
+            drone.scanned_unsaved_creature.insert(creature_id);
         }
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let visible_creature_count = parse_input!(input_line, i32);
+    // dbg!(format!("visible creature count {input_line}"));
     for _ in 0..visible_creature_count as usize {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let creature: Creature = input_line.parse().unwrap();
+        dbg!(format!("creature {input_line}"));
         let cid = creature.id;
         creatures
             .entry(cid)
@@ -418,9 +489,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
             .or_insert(creature);
         // dbg!(&creatures[&cid]);
     }
-    // dbg!(&me);
-    // dbg!(&foe);
-    // dbg!(&creatures);
+    dbg!("end of parsing");
 }
 
 /**
@@ -442,30 +511,41 @@ fn main() {
     let mut foe = Player::default();
 
     // game loop
-    loop {
+    for loop_number in 0..200 {
+        eprintln!("beginning of loop {loop_number}");
         parse_game_input(&mut me, &mut foe, &mut creatures);
         // To ignore
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let radar_blip_count = parse_input!(input_line, i32);
-        for _i in 0..radar_blip_count as usize {
+        let radar_blip_count = parse_input!(input_line, usize);
+        dbg!(radar_blip_count);
+        for _i in 0..radar_blip_count {
             let mut input_line = String::new();
             io::stdin().read_line(&mut input_line).unwrap();
             let inputs = input_line.split(' ').collect::<Vec<_>>();
             let _drone_id = parse_input!(inputs[0], i32);
             let _creature_id = parse_input!(inputs[1], i32);
             let _radar = inputs[2].trim().to_string();
+            dbg!(&input_line);
         }
 
-        for d in me.drones.values() {
-            let nearest = me
-                .get_update_nearest_creature(&mut creatures)
-                .map(|(_, n)| n);
+        eprintln!("beginning of commands for loop {loop_number}");
+        for d in me.drones.iter_mut() {
+            if loop_number > 185 {
+                d.phase = Phase::Surfacing;
+            }
+            if rand::thread_rng().gen_range(0..=40) == 0 {
+                d.phase = Phase::Surfacing;
+            }
+            // let nearest = me
+            //     .get_update_nearest_creature(&mut creatures)
+            //     .map(|(_, n)| n);
 
             // Write an action using println!("message...");
             // To debug: eprintln!("Debug message...");
             // println!("WAIT 1"); // MOVE <x> <y> <light (1|0)> | WAIT <light (1|0)>
             println!("{}", d.get_command(&creatures, &mut exploration_grid))
         }
+        eprintln!("end of loop {loop_number}");
     }
 }
