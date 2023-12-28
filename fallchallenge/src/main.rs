@@ -26,7 +26,7 @@ enum Phase {
     Debug,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Drone {
     id: u8,
     phase: Phase,
@@ -34,6 +34,12 @@ struct Drone {
     emergency: u8,
     battery: u32,
     scanned_unsaved_creature: HashSet<u8>,
+    /// position of creatures
+    /// [
+    ///     [ TL: Vec<u8>, TR: Vec<u8> ],
+    ///     [ BL: Vec<u8>, BR: Vec<u8> ],
+    /// ]
+    radar: Vec<Vec<Vec<u8>>>,
 }
 
 impl Drone {
@@ -70,6 +76,8 @@ impl Drone {
         let mut light = rand::thread_rng().gen_range(0..=1);
         if self.battery < 10 {
             light = 0;
+        } else if self.battery > 25 {
+            light = 1;
         }
         match &self.phase {
             Phase::Capturing => {
@@ -125,6 +133,26 @@ impl Drone {
         self.position = other.position;
         self.emergency = other.emergency;
         self.battery = other.battery;
+    }
+    fn get_capture_move(&self) -> Option<(u32, u32)> {
+        // TODO
+        // find nearest creature on radar
+        // find sector
+        // compute displacement
+        todo!()
+    }
+}
+impl Default for Drone {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            phase: Phase::default(),
+            position: (0, 0),
+            emergency: 0,
+            battery: 0,
+            scanned_unsaved_creature: HashSet::new(),
+            radar: vec![vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]],
+        }
     }
 }
 
@@ -520,6 +548,8 @@ fn main() {
         let radar_blip_count = parse_input!(input_line, usize);
         dbg!(radar_blip_count);
         for _i in 0..radar_blip_count {
+            // XXX
+            // TODO: fill radar
             let mut input_line = String::new();
             io::stdin().read_line(&mut input_line).unwrap();
             let inputs = input_line.split(' ').collect::<Vec<_>>();
