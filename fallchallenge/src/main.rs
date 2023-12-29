@@ -26,6 +26,18 @@ enum Phase {
     Debug,
 }
 
+impl Phase {
+    fn get_random() -> Self {
+        match rand::thread_rng().gen_range(0..=3) {
+            0 => Self::Capturing,
+            1 => Self::Exploring,
+            2 => Self::Diving,
+            3 => Self::Surfacing,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Drone {
     id: u8,
@@ -35,10 +47,12 @@ struct Drone {
     battery: u32,
     scanned_unsaved_creature: HashSet<u8>,
     /// position of creatures
+    /// ```
     /// [
     ///     [ TL: Vec<u8>, TR: Vec<u8> ],
     ///     [ BL: Vec<u8>, BR: Vec<u8> ],
     /// ]
+    /// ```
     radar: Vec<Vec<Vec<u8>>>,
 }
 
@@ -46,9 +60,21 @@ impl Drone {
     fn creature_distance(&self, other: &Creature) -> u32 {
         distance(self.position, other.position)
     }
+
     fn distance(&self, position: (u32, u32)) -> u32 {
         distance(self.position, position)
     }
+
+    fn combine(&mut self, other: &Drone) {
+        self.position = other.position;
+        self.emergency = other.emergency;
+        self.battery = other.battery;
+    }
+
+    fn clear_radar(&mut self) {
+        self.radar = vec![vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]]
+    }
+
     fn get_command(
         &mut self,
         creatures: &HashMap<u8, Creature>,
@@ -71,7 +97,7 @@ impl Drone {
         }
         if self.position.1 < 500 {
             self.scanned_unsaved_creature.clear();
-            self.phase = Phase::Exploring;
+            self.phase = Phase::get_random();
         }
         let mut light = rand::thread_rng().gen_range(0..=1);
         if self.battery < 10 {
@@ -81,13 +107,13 @@ impl Drone {
         }
         match &self.phase {
             Phase::Capturing => {
-                if let Some((a, b)) = self.get_exploration_move(grid) {
+                if let Some((a, b)) = self.get_capture_move() {
                     if self.distance((a, b)) < 2000 {
                         light = 1;
                     }
                     format!("MOVE {a} {b} {light}")
                 } else {
-                    self.phase = Phase::Diving;
+                    self.phase = Phase::get_random();
                     self.get_command(creatures, grid)
                 }
             }
@@ -96,13 +122,13 @@ impl Drone {
                 if let Some((a, b)) = self.get_exploration_move(grid) {
                     format!("MOVE {a} {b} {light}")
                 } else {
-                    self.phase = Phase::Capturing;
+                    self.phase = Phase::get_random();
                     self.get_command(creatures, grid)
                 }
             }
             Phase::Diving => {
                 if self.position.1 > 9500 {
-                    self.phase = Phase::Exploring;
+                    self.phase = Phase::get_random();
                 }
                 format!("WAIT {light}")
             }
@@ -129,17 +155,58 @@ impl Drone {
             None
         }
     }
-    fn combine(&mut self, other: &Drone) {
-        self.position = other.position;
-        self.emergency = other.emergency;
-        self.battery = other.battery;
-    }
+
     fn get_capture_move(&self) -> Option<(u32, u32)> {
         // TODO
         // find nearest creature on radar
         // find sector
+        let (idx, length) = self
+            .radar
+            .iter()
+            .flatten()
+            .map(|a| a.len())
+            .enumerate()
+            .max_by_key(|a| a.1)
+            .expect("radar not empty");
         // compute displacement
-        todo!()
+        if length == 0 {
+            return None;
+        }
+        let step = 850;
+        let r = match idx {
+            0 | 1 => {
+                if self.position.1 < step {
+                    (self.position.0, 0)
+                } else {
+                    (self.position.0, self.position.1 - step)
+                }
+            }
+            2 | 3 => {
+                if self.position.1 + step > 10000 {
+                    (self.position.0, 10000)
+                } else {
+                    (self.position.0, self.position.1 + step)
+                }
+            }
+            _ => unreachable!(),
+        };
+        match idx {
+            0 | 1 => {
+                if r.0 < step {
+                    Some((0, r.1))
+                } else {
+                    Some((r.0 - step, r.1))
+                }
+            }
+            2 | 3 => {
+                if r.0 + step > 10000 {
+                    Some((10000, r.1))
+                } else {
+                    Some((r.0 + step, r.1))
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 }
 impl Default for Drone {
@@ -400,7 +467,7 @@ where
 }
 
 fn get_exploration_grid() -> Vec<(u32, u32)> {
-    let h_step = 850;
+    let h_step = 1250;
     let v_step = h_step + h_step / 2;
     let max_h = 10000;
     let max_v = 10000;
@@ -507,7 +574,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let creature: Creature = input_line.parse().unwrap();
-        dbg!(format!("creature {input_line}"));
+        // dbg!(format!("creature {input_line}"));
         let cid = creature.id;
         creatures
             .entry(cid)
@@ -517,6 +584,31 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
             .or_insert(creature);
         // dbg!(&creatures[&cid]);
     }
+    for drone in me.drones.iter_mut() {
+        drone.clear_radar();
+    }
+    let mut input_line = String::new();
+    io::stdin().read_line(&mut input_line).unwrap();
+    let radar_blip_count = parse_input!(input_line, usize);
+    // dbg!(radar_blip_count);
+    for _ in 0..radar_blip_count {
+        let mut input_line = String::new();
+        io::stdin().read_line(&mut input_line).unwrap();
+        let inputs = input_line.split(' ').collect::<Vec<_>>();
+        let drone_id = parse_input!(inputs[0], u8);
+        let creature_id = parse_input!(inputs[1], u8);
+        let radar = inputs[2].trim();
+        if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
+            match radar {
+                "TL" => drone.radar[0][0].push(creature_id),
+                "TR" => drone.radar[0][1].push(creature_id),
+                "BL" => drone.radar[1][0].push(creature_id),
+                "BR" => drone.radar[1][1].push(creature_id),
+                _ => unreachable!(),
+            }
+        }
+    }
+
     dbg!("end of parsing");
 }
 
@@ -542,23 +634,6 @@ fn main() {
     for loop_number in 0..200 {
         eprintln!("beginning of loop {loop_number}");
         parse_game_input(&mut me, &mut foe, &mut creatures);
-        // To ignore
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let radar_blip_count = parse_input!(input_line, usize);
-        dbg!(radar_blip_count);
-        for _i in 0..radar_blip_count {
-            // XXX
-            // TODO: fill radar
-            let mut input_line = String::new();
-            io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(' ').collect::<Vec<_>>();
-            let _drone_id = parse_input!(inputs[0], i32);
-            let _creature_id = parse_input!(inputs[1], i32);
-            let _radar = inputs[2].trim().to_string();
-            dbg!(&input_line);
-        }
-
         eprintln!("beginning of commands for loop {loop_number}");
         for d in me.drones.iter_mut() {
             if loop_number > 185 {
