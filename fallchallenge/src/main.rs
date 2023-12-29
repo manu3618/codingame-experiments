@@ -120,6 +120,7 @@ impl Drone {
             Phase::Exploring => {
                 dbg!(grid.len());
                 if let Some((a, b)) = self.get_exploration_move(grid) {
+                    self.phase = Phase::get_random();
                     format!("MOVE {a} {b} {light}")
                 } else {
                     self.phase = Phase::get_random();
@@ -586,6 +587,11 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
     }
     for drone in me.drones.iter_mut() {
         drone.clear_radar();
+        if drone.position.1 < 500 {
+            for creature in drone.scanned_unsaved_creature.drain() {
+                me.creatures.insert(creature);
+            }
+        }
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -597,6 +603,15 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let inputs = input_line.split(' ').collect::<Vec<_>>();
         let drone_id = parse_input!(inputs[0], u8);
         let creature_id = parse_input!(inputs[1], u8);
+        if me.creatures.contains(&creature_id) {
+            continue;
+        }
+        if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
+            if drone.scanned_unsaved_creature.contains(&creature_id) {
+                // XXX
+                continue;
+            }
+        }
         let radar = inputs[2].trim();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
             match radar {
