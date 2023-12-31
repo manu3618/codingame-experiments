@@ -649,11 +649,19 @@ fn main() {
         eprintln!("beginning of loop {loop_number}");
         parse_game_input(&mut me, &mut foe, &mut creatures);
         eprintln!("beginning of commands for loop {loop_number}");
+        let drones_coord = me
+            .drones
+            .iter()
+            .map(|d| d.position.clone())
+            .collect::<Vec<_>>();
         for d in me.drones.iter_mut() {
-            if loop_number > 185 {
-                d.phase = Phase::Surfacing;
+            if loop_number % 10 == 0 && d.phase == Phase::Capturing {
+                d.phase = Phase::get_random();
             }
-            if rand::thread_rng().gen_range(0..=40) == 0 {
+            if drones_coord.iter().any(|&c| d.distance(c) < 800) {
+                d.phase = Phase::get_random();
+            }
+            if loop_number > 185 {
                 d.phase = Phase::Surfacing;
             }
             // let nearest = me
