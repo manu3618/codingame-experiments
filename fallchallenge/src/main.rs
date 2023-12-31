@@ -669,13 +669,12 @@ fn main() {
             .map(|d| (d.id, d.position))
             .collect::<Vec<_>>();
 
-        // dbg!(&drones_coord);
         for d in me.drones.iter_mut() {
             // change phase if drone are too close from each other
             if drones_coord
                 .clone()
                 .iter()
-                .any(|&c| d.id != c.0 && d.distance(c.1) < 1000)
+                .any(|&c| d.id != c.0 && d.distance(c.1) < 500000)
                 && d.phase != Phase::Surfacing
             {
                 dbg!(&drones_coord);
