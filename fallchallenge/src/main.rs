@@ -13,7 +13,7 @@ macro_rules! parse_input {
     };
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 enum Phase {
     /// trying to capture a creature
     Capturing,
@@ -120,7 +120,6 @@ impl Drone {
             Phase::Exploring => {
                 dbg!(grid.len());
                 if let Some((a, b)) = self.get_exploration_move(grid) {
-                    self.phase = Phase::get_random();
                     format!("MOVE {a} {b} {light}")
                 } else {
                     self.phase = Phase::get_random();
@@ -558,7 +557,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         // dbg!(format!("drone id, creature id {input_line}"));
         let line = input_line.trim().split(' ').collect::<Vec<_>>();
         let drone_id = line[0].parse::<u8>().unwrap();
-        let creature_id = line[0].parse::<u8>().unwrap();
+        let creature_id = line[1].parse::<u8>().unwrap();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
             drone.scanned_unsaved_creature.insert(creature_id);
         }
