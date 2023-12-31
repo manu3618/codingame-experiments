@@ -16,10 +16,10 @@ macro_rules! parse_input {
 #[derive(Debug, Default, PartialEq, Eq)]
 enum Phase {
     /// trying to capture a creature
+    #[default]
     Capturing,
     /// trying to explore as much space as possible
     Exploring,
-    #[default]
     Diving,
     /// trying to save points
     Surfacing,
@@ -65,6 +65,19 @@ impl Drone {
         distance(self.position, position)
     }
 
+    fn change_phase(&mut self) {
+        if self.scanned_unsaved_creature.is_empty() {
+            self.phase = match rand::thread_rng().gen_range(0..=2) {
+                0 => Phase::Capturing,
+                1 => Phase::Exploring,
+                2 => Phase::Diving,
+                _ => unreachable!(),
+            };
+        } else {
+            self.phase = Phase::get_random();
+        }
+    }
+
     fn combine(&mut self, other: &Drone) {
         self.position = other.position;
         self.emergency = other.emergency;
@@ -97,7 +110,7 @@ impl Drone {
         }
         if self.position.1 < 500 {
             self.scanned_unsaved_creature.clear();
-            self.phase = Phase::get_random();
+            self.change_phase();
         }
         let mut light = rand::thread_rng().gen_range(0..=1);
         if self.battery < 10 {
@@ -108,27 +121,28 @@ impl Drone {
         match &self.phase {
             Phase::Capturing => {
                 if let Some((a, b)) = self.get_capture_move() {
-                    if self.distance((a, b)) < 2000 {
-                        light = 1;
-                    }
+                    // if self.distance((a, b)) < 20 {
+                    //     light = 1;
+                    // }
                     format!("MOVE {a} {b} {light}")
                 } else {
-                    self.phase = Phase::get_random();
+                    self.change_phase();
                     self.get_command(creatures, grid)
                 }
             }
             Phase::Exploring => {
-                dbg!(grid.len());
+                // dbg!(grid.len());
+                self.change_phase();
                 if let Some((a, b)) = self.get_exploration_move(grid) {
                     format!("MOVE {a} {b} {light}")
                 } else {
-                    self.phase = Phase::get_random();
+                    self.change_phase();
                     self.get_command(creatures, grid)
                 }
             }
             Phase::Diving => {
                 if self.position.1 > 9500 {
-                    self.phase = Phase::get_random();
+                    self.change_phase();
                 }
                 format!("WAIT {light}")
             }
@@ -191,14 +205,14 @@ impl Drone {
             _ => unreachable!(),
         };
         match idx {
-            0 | 1 => {
+            0 | 2 => {
                 if r.0 < step {
                     Some((0, r.1))
                 } else {
                     Some((r.0 - step, r.1))
                 }
             }
-            2 | 3 => {
+            1 | 3 => {
                 if r.0 + step > 10000 {
                     Some((10000, r.1))
                 } else {
@@ -560,6 +574,7 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let creature_id = line[1].parse::<u8>().unwrap();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
             drone.scanned_unsaved_creature.insert(creature_id);
+            me.creatures.insert(creature_id);
         }
         // dbg!(&me.drones);
         if let Some(drone) = foe.drones.iter_mut().find(|d| d.id == drone_id) {
@@ -607,7 +622,6 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         }
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
             if drone.scanned_unsaved_creature.contains(&creature_id) {
-                // XXX
                 continue;
             }
         }
@@ -652,15 +666,28 @@ fn main() {
         let drones_coord = me
             .drones
             .iter()
-            .map(|d| d.position.clone())
+            .map(|d| (d.id, d.position))
             .collect::<Vec<_>>();
+
+        // dbg!(&drones_coord);
         for d in me.drones.iter_mut() {
-            if loop_number % 10 == 0 && d.phase == Phase::Capturing {
-                d.phase = Phase::get_random();
+            // change phase if drone are too close from each other
+            if drones_coord
+                .clone()
+                .iter()
+                .any(|&c| d.id != c.0 && d.distance(c.1) < 1000)
+                && d.phase != Phase::Surfacing
+            {
+                dbg!(&drones_coord);
+                d.change_phase();
             }
-            if drones_coord.iter().any(|&c| d.distance(c) < 800) {
-                d.phase = Phase::get_random();
+
+            // randomly change phase
+            if rand::thread_rng().gen_range(0..=40) == 0 {
+                d.change_phase();
             }
+
+            // surface if end is near
             if loop_number > 185 {
                 d.phase = Phase::Surfacing;
             }
