@@ -107,7 +107,7 @@ impl Drone {
         //     _ => rand::thread_rng().gen_range(0..=1),
         // };
         dbg!(self.scanned_unsaved_creature.len());
-        if self.scanned_unsaved_creature.len() > 3 {
+        if self.scanned_unsaved_creature.len() > 5 {
             self.phase = Phase::Surfacing;
         }
         if self.position.1 < 500 {
@@ -128,6 +128,7 @@ impl Drone {
                     // }
                     format!("MOVE {a} {b} {light}")
                 } else {
+                    self.assigned_creature.extend(0..12);
                     self.change_phase();
                     self.get_command(creatures, grid)
                 }
@@ -541,12 +542,12 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         me.creatures.insert(parse_input!(input_line, u8));
-        //   dbg!(format!("creature id {input_line}"));
+        // dbg!(format!("creature id {input_line}"));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let foe_scan_count = parse_input!(input_line, usize);
-    //dbg!(format!("foe scan count {input_line}"));
+    // dbg!(format!("foe scan count {input_line}"));
     for _ in 0..foe_scan_count {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
@@ -690,6 +691,16 @@ fn main() {
             .map(|d| (d.id, d.position))
             .collect::<Vec<_>>();
 
+        let mut unsaved = me
+            .drones
+            .iter()
+            .map(|d| d.scanned_unsaved_creature.iter())
+            .flatten()
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|&d| *d)
+            .collect::<HashSet<u8>>();
+
         for d in me.drones.iter_mut() {
             // change phase if drone are too close from each other
             if drones_coord
@@ -703,12 +714,16 @@ fn main() {
             }
 
             // randomly change phase
-            if rand::thread_rng().gen_range(0..=40) == 0 {
+            if rand::thread_rng().gen_range(0..=80) == 0 {
                 d.change_phase();
             }
 
             // surface if end is near
             if loop_number > 185 {
+                d.phase = Phase::Surfacing;
+            }
+
+            if (&unsaved | &me.creatures).len() == 12 {
                 d.phase = Phase::Surfacing;
             }
             // let nearest = me
