@@ -137,7 +137,6 @@ impl Drone {
                 }
             }
             Phase::Exploring => {
-                // dbg!(grid.len());
                 self.change_phase();
                 if let Some((a, b)) = self.get_exploration_move(grid) {
                     format!("MOVE {a} {b} {light}")
@@ -303,8 +302,8 @@ impl Creature {
     fn combine(&self, other: &Creature) -> Self {
         Self {
             id: self.id,
-            creature_type: self.creature_type.max(other.creature_type),
-            color: self.color.max(other.color),
+            creature_type: self.creature_type,
+            color: self.color,
             position: other.position,
             velocity: other.velocity,
         }
@@ -609,15 +608,13 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let creature: Creature = input_line.parse().unwrap();
-        // dbg!(format!("creature {input_line}"));
+        dbg!(format!("creature {input_line}"));
         let cid = creature.id;
         creatures
             .entry(cid)
-            .and_modify(|e| {
-                e.combine(&creature);
-            })
+            .and_modify(|e| *e = e.combine(&creature))
             .or_insert(creature);
-        // dbg!(&creatures[&cid]);
+        dbg!(&creatures[&cid]);
     }
     for drone in me.drones.iter_mut() {
         drone.clear_radar();
