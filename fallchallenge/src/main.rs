@@ -114,6 +114,9 @@ impl Drone {
             self.scanned_unsaved_creature.clear();
             self.change_phase();
         }
+        if self.phase == Phase::Diving && self.position.1 > 9900 {
+            self.change_phase();
+        }
         let mut light = rand::thread_rng().gen_range(0..=1);
         if self.battery < 10 {
             light = 0;
@@ -289,8 +292,8 @@ impl FromStr for Drone {
 #[derive(Debug)]
 struct Creature {
     id: u8,
-    creature_type: u8,
-    color: u8,
+    creature_type: i8,
+    color: i8,
     position: (u32, u32),
     velocity: (i32, i32),
 }
@@ -374,6 +377,7 @@ impl FromStr for Creature {
             } else {
                 return Err(ParseCreatureError);
             }
+            dbg!(&creature);
         }
         Ok(creature)
     }
