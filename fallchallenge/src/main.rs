@@ -54,6 +54,8 @@ struct Drone {
     /// ]
     /// ```
     radar: Vec<Vec<Vec<u8>>>,
+    /// creatures to scan
+    assigned_creature: HashSet<u8>,
 }
 
 impl Drone {
@@ -73,7 +75,7 @@ impl Drone {
                 2 => Phase::Diving,
                 _ => unreachable!(),
             };
-        } else {
+        } else if self.phase != Phase::Surfacing {
             self.phase = Phase::get_random();
         }
     }
@@ -170,7 +172,7 @@ impl Drone {
         }
     }
 
-    fn get_capture_move(&self) -> Option<(u32, u32)> {
+    fn get_capture_move(&mut self) -> Option<(u32, u32)> {
         // TODO
         // find nearest creature on radar
         // find sector
@@ -233,6 +235,7 @@ impl Default for Drone {
             battery: 0,
             scanned_unsaved_creature: HashSet::new(),
             radar: vec![vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]],
+            assigned_creature: HashSet::with_capacity(12),
         }
     }
 }
@@ -454,6 +457,18 @@ impl Player {
             None => self.drones.push(drone),
         }
     }
+
+    /// assign creatures to scan to drones
+    fn assign_creatures(&mut self) {
+        let dlen = self.drones.len();
+        for a in 0..12 {
+            self.drones
+                .get_mut(a % dlen)
+                .unwrap()
+                .assigned_creature
+                .insert(a as u8);
+        }
+    }
 }
 
 fn get_nearest_drone_creature<'a, D, C>(
@@ -624,6 +639,9 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
             if drone.scanned_unsaved_creature.contains(&creature_id) {
                 continue;
             }
+            if !drone.assigned_creature.contains(&creature_id) {
+                continue;
+            }
         }
         let radar = inputs[2].trim();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
@@ -662,6 +680,9 @@ fn main() {
     for loop_number in 0..200 {
         eprintln!("beginning of loop {loop_number}");
         parse_game_input(&mut me, &mut foe, &mut creatures);
+        if loop_number == 0 {
+            me.assign_creatures();
+        }
         eprintln!("beginning of commands for loop {loop_number}");
         let drones_coord = me
             .drones
