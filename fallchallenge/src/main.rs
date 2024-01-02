@@ -23,6 +23,8 @@ enum Phase {
     Diving,
     /// trying to save points
     Surfacing,
+    /// Hide from monster
+    Hiding,
     Debug,
 }
 
@@ -153,6 +155,10 @@ impl Drone {
             }
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
             Phase::Debug => format!("MOVE {} {} 0", self.position.0, self.position.1 + 10),
+            Phase::Hiding => {
+                let (a, b) = self.get_hiding_move(creatures);
+                format!("MOVE {a} {b} 0")
+            }
         }
     }
 
@@ -227,6 +233,37 @@ impl Drone {
             _ => unreachable!(),
         }
     }
+
+    fn get_sorted_monster_coords(&self, creature: &HashMap<u8, Creature>) -> Vec<(u32, u32)> {
+        let mut monster_coords = creature
+            .values()
+            .filter(|c| c.id > 12)
+            .map(|c| c.position)
+            .map(|p| (p, self.distance(p)))
+            .collect::<Vec<_>>();
+        monster_coords.sort_by_key(|a| a.1);
+        // dbg!(&monster_coords);
+        monster_coords.iter().map(|a| a.0).collect::<Vec<_>>()
+    }
+
+    /// get movement to hide from monsters
+    ///
+    /// try to get to surface if possible while getting away from monsters
+    fn get_hiding_move(&self, creatures: &HashMap<u8, Creature>) -> (u32, u32) {
+        let monster_coords = &self.get_sorted_monster_coords(&creatures);
+        let nearest = monster_coords[0];
+        dbg!(&nearest);
+        let direction = (
+            self.position.0 as i32 - nearest.0 as i32,
+            self.position.1 as i32 - nearest.1 as i32,
+        );
+        dbg!(&direction);
+        //XXX
+        (
+            (self.position.0 as i32 + direction.0).min(10000).max(0) as u32,
+            (self.position.1 as i32 + direction.1).min(10000).max(0) as u32,
+        )
+    }
 }
 impl Default for Drone {
     fn default() -> Self {
@@ -238,6 +275,7 @@ impl Default for Drone {
             battery: 0,
             scanned_unsaved_creature: HashSet::new(),
             radar: vec![vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]],
+            monster_radar: vec![vec![Vec::new(), Vec::new()], vec![Vec::new(), Vec::new()]],
             assigned_creature: HashSet::with_capacity(12),
         }
     }
@@ -641,22 +679,31 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
             if drone.scanned_unsaved_creature.contains(&creature_id) {
                 continue;
             }
-            if !drone.assigned_creature.contains(&creature_id) {
+            if !drone.assigned_creature.contains(&creature_id) && creature_id <= 12 {
                 continue;
             }
         }
         let radar = inputs[2].trim();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
-            match radar {
-                "TL" => drone.radar[0][0].push(creature_id),
-                "TR" => drone.radar[0][1].push(creature_id),
-                "BL" => drone.radar[1][0].push(creature_id),
-                "BR" => drone.radar[1][1].push(creature_id),
-                _ => unreachable!(),
+            if creatures[&creature_id].color == -1 {
+                match radar {
+                    "TL" => drone.monster_radar[0][0].push(creature_id),
+                    "TR" => drone.monster_radar[0][1].push(creature_id),
+                    "BL" => drone.monster_radar[1][0].push(creature_id),
+                    "BR" => drone.monster_radar[1][1].push(creature_id),
+                    _ => unreachable!(),
+                }
+            } else {
+                match radar {
+                    "TL" => drone.radar[0][0].push(creature_id),
+                    "TR" => drone.radar[0][1].push(creature_id),
+                    "BL" => drone.radar[1][0].push(creature_id),
+                    "BR" => drone.radar[1][1].push(creature_id),
+                    _ => unreachable!(),
+                }
             }
         }
     }
-
     dbg!("end of parsing");
 }
 
@@ -692,7 +739,7 @@ fn main() {
             .map(|d| (d.id, d.position))
             .collect::<Vec<_>>();
 
-        let mut unsaved = me
+        let unsaved = me
             .drones
             .iter()
             .map(|d| d.scanned_unsaved_creature.iter())
@@ -703,6 +750,7 @@ fn main() {
             .collect::<HashSet<u8>>();
 
         for d in me.drones.iter_mut() {
+            dbg!(d.get_hiding_move(&creatures));
             // change phase if drone are too close from each other
             if drones_coord
                 .clone()
