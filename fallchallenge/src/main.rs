@@ -56,6 +56,7 @@ struct Drone {
     /// ]
     /// ```
     radar: Vec<Vec<Vec<u8>>>,
+    monster_radar: Vec<Vec<Vec<u8>>>,
     /// creatures to scan
     assigned_creature: HashSet<u8>,
 }
@@ -156,6 +157,7 @@ impl Drone {
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
             Phase::Debug => format!("MOVE {} {} 0", self.position.0, self.position.1 + 10),
             Phase::Hiding => {
+                self.phase = Phase::Surfacing;
                 let (a, b) = self.get_hiding_move(creatures);
                 format!("MOVE {a} {b} 0")
             }
@@ -242,23 +244,27 @@ impl Drone {
             .map(|p| (p, self.distance(p)))
             .collect::<Vec<_>>();
         monster_coords.sort_by_key(|a| a.1);
-        // dbg!(&monster_coords);
         monster_coords.iter().map(|a| a.0).collect::<Vec<_>>()
     }
 
+    fn get_monster_distance(&self, creature: &HashMap<u8, Creature>) -> u32 {
+        let nearest = creature
+            .values()
+            .filter(|c| c.id > 12)
+            .map(|c| c.position)
+            .map(|p| (p, self.distance(p)))
+            .min_by_key(|a| a.1);
+        nearest.unwrap().1
+    }
+
     /// get movement to hide from monsters
-    ///
-    /// try to get to surface if possible while getting away from monsters
     fn get_hiding_move(&self, creatures: &HashMap<u8, Creature>) -> (u32, u32) {
         let monster_coords = &self.get_sorted_monster_coords(&creatures);
         let nearest = monster_coords[0];
-        dbg!(&nearest);
         let direction = (
             self.position.0 as i32 - nearest.0 as i32,
             self.position.1 as i32 - nearest.1 as i32,
         );
-        dbg!(&direction);
-        //XXX
         (
             (self.position.0 as i32 + direction.0).min(10000).max(0) as u32,
             (self.position.1 as i32 + direction.1).min(10000).max(0) as u32,
@@ -414,7 +420,7 @@ impl FromStr for Creature {
             } else {
                 return Err(ParseCreatureError);
             }
-            dbg!(&creature);
+            // dbg!(&creature);
         }
         Ok(creature)
     }
@@ -422,6 +428,17 @@ impl FromStr for Creature {
 
 fn distance(a: (u32, u32), b: (u32, u32)) -> u32 {
     ((a.0 as i32 - b.0 as i32).pow(2) + (a.1 as i32 - b.1 as i32).pow(2)) as u32
+}
+
+fn normalize<T>(a: (T, T)) -> (T, T)
+where
+    T: From<i32>,
+    i32: From<T>,
+{
+    let b: (i32, i32) = (a.0.into(), a.1.into());
+    let l = 10000;
+    let n = ((b.0.pow(2) + b.1.pow(2)) as f32).sqrt() as i32;
+    ((b.0 * l / n).into(), (b.1 * l / n).into())
 }
 
 #[derive(Debug, Default)]
@@ -646,13 +663,13 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let creature: Creature = input_line.parse().unwrap();
-        dbg!(format!("creature {input_line}"));
+        // dbg!(format!("creature {input_line}"));
         let cid = creature.id;
         creatures
             .entry(cid)
             .and_modify(|e| *e = e.combine(&creature))
             .or_insert(creature);
-        dbg!(&creatures[&cid]);
+        // dbg!(&creatures[&cid]);
     }
     for drone in me.drones.iter_mut() {
         drone.clear_radar();
@@ -750,7 +767,10 @@ fn main() {
             .collect::<HashSet<u8>>();
 
         for d in me.drones.iter_mut() {
-            dbg!(d.get_hiding_move(&creatures));
+            dbg!(d.get_monster_distance(&creatures));
+            if d.get_monster_distance(&creatures) < 1000000 {
+                d.phase = Phase::Hiding;
+            }
             // change phase if drone are too close from each other
             if drones_coord
                 .clone()
