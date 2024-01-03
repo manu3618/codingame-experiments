@@ -157,7 +157,11 @@ impl Drone {
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
             Phase::Debug => format!("MOVE {} {} 0", self.position.0, self.position.1 + 10),
             Phase::Hiding => {
-                self.phase = Phase::Surfacing;
+                if self.scanned_unsaved_creature.is_empty() {
+                    self.change_phase();
+                } else {
+                    self.phase = Phase::Surfacing;
+                }
                 let (a, b) = self.get_hiding_move(creatures);
                 format!("MOVE {a} {b} 0")
             }
@@ -360,10 +364,9 @@ impl Default for Creature {
             id: 0,
             creature_type: 0,
             color: 0,
-            position: (
-                rand::thread_rng().gen_range(1..=10000),
-                rand::thread_rng().gen_range(1..=10000),
-            ),
+            position: (5000, 100000),
+            // rand::thread_rng().gen_range(1..=10000),
+            // rand::thread_rng().gen_range(1..=10000),
             velocity: (0, 0),
         }
     }
@@ -768,7 +771,7 @@ fn main() {
 
         for d in me.drones.iter_mut() {
             dbg!(d.get_monster_distance(&creatures));
-            if d.get_monster_distance(&creatures) < 1000000 {
+            if d.get_monster_distance(&creatures) < 1_000_000 {
                 d.phase = Phase::Hiding;
             }
             // change phase if drone are too close from each other
