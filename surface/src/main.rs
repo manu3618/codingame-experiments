@@ -44,7 +44,7 @@ impl WaterMap {
         if let Some(&n) = self.results.get(&coords) {
             return n;
         }
-        let mut area = HashSet::new();
+        let mut area: HashSet<(usize, usize)> = HashSet::from_iter(vec![coords]);
         let mut to_explore = self.get_neighbors(coords);
         while !to_explore.is_empty() {
             let mut new_explore = HashSet::new(); // to_explore for next iteration
