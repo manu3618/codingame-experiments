@@ -25,13 +25,13 @@ impl WaterMap {
         if coords.0 > 0 {
             res.insert((coords.0 - 1, coords.1));
         }
-        if coords.0 < self.width - 1 {
+        if coords.0 < self.height - 1 {
             res.insert((coords.0 + 1, coords.1));
         }
         if coords.1 > 0 {
             res.insert((coords.0, coords.1 - 1));
         }
-        if coords.1 < self.height - 1 {
+        if coords.1 < self.width - 1 {
             res.insert((coords.0, coords.1 + 1));
         }
         res
@@ -124,8 +124,10 @@ fn main() {
         map_input.push(row);
     }
     let mut water_map = WaterMap::from_iter(map_input);
-    eprintln!("map");
-    eprintln!("{}", &water_map);
+    // eprintln!("map");
+    // eprintln!("{}", &water_map);
+    dbg!(&water_map.width);
+    dbg!(&water_map.height);
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let n = parse_input!(input_line, i32);
