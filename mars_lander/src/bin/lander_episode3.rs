@@ -328,9 +328,9 @@ impl Lander {
         if self.h_speed.abs() > MAX_SPEED {
             eprintln!("Debug message SHOULD NOT BE REACHED... speed limit");
             if self.h_speed > 0 {
-                self.rotation = self.rotation.abs();
+                self.rotation = self.rotation.abs().max(5);
             } else {
-                self.rotation = -self.rotation.abs();
+                self.rotation = -self.rotation.abs().max(5);
             }
         }
         if self.rotation.abs() > 30 {
