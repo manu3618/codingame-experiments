@@ -1,3 +1,5 @@
+// https://www.codingame.com/ide/puzzle/2-5d-maze
+
 use std::collections::HashMap;
 use std::io;
 use std::str::FromStr;
@@ -160,12 +162,15 @@ impl Maze {
                 for e in self
                     .get_path_extensions(p.0.last().expect("path contains at least start").clone())
                 {
+                    let dest = e.last().unwrap();
+                    if p.0.contains(&dest) {
+                        continue;
+                    }
                     let mut new_path = p.clone();
                     new_path.0.append(&mut e.clone());
                     to_add.push(new_path);
                 }
             }
-
             for p in to_add {
                 let dest = p.0.last().expect("path not empty").clone();
                 let cur = paths.entry(dest.clone()).or_insert(p.clone());
@@ -228,7 +233,7 @@ impl Maze {
         let mut neighb = Vec::new();
         if c.column > 0 {
             neighb.push((
-                Direction::North,
+                Direction::West,
                 Coord {
                     column: c.column - 1,
                     ..c
@@ -237,7 +242,7 @@ impl Maze {
         }
         if c.column < self.size.1 {
             neighb.push((
-                Direction::South,
+                Direction::East,
                 Coord {
                     column: c.column + 1,
                     ..c
@@ -246,7 +251,7 @@ impl Maze {
         }
         if c.line > 0 {
             neighb.push((
-                Direction::West,
+                Direction::North,
                 Coord {
                     line: c.line - 1,
                     ..c
@@ -255,7 +260,7 @@ impl Maze {
         }
         if c.line < self.size.0 {
             neighb.push((
-                Direction::East,
+                Direction::South,
                 Coord {
                     line: c.line + 1,
                     ..c
