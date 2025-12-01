@@ -1,4 +1,5 @@
 // https://www.codingame.com/ide/puzzle/tower-dereference
+use itertools::enumerate;
 use std::fmt;
 use std::io;
 
@@ -13,8 +14,15 @@ struct Map(Vec<Vec<char>>);
 
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for v in &self.0 {
-            write!(f, "{}", v.iter().collect::<String>())?
+        write!(
+            f,
+            "  {}\n",
+            (0..self.0.first().unwrap().len())
+                .map(|x| format!("{}", x % 10))
+                .collect::<String>()
+        )?;
+        for (num, v) in enumerate(&self.0) {
+            write!(f, "{} {}\n", num % 10, v.iter().collect::<String>())?
         }
         Ok(())
     }
@@ -31,14 +39,14 @@ impl Map {
         let (Some(width), Some(height)) = (line.next(), line.next()) else {
             panic!("fail to parse map size")
         };
-        let width: usize = width.parse().unwrap();
-        let height: usize = height.parse().unwrap();
+        let width: usize = width.trim().parse().unwrap();
+        let height: usize = height.trim().parse().unwrap();
 
         let mut map = Vec::new();
         for _ in 0..height {
+            input_line.clear();
             io::stdin().read_line(&mut input_line).unwrap();
-            input_line.trim();
-            map.push(input_line.chars().into_iter().collect::<Vec<_>>());
+            map.push(input_line.trim().chars().into_iter().collect::<Vec<_>>());
             debug_assert!(map.last().unwrap().len() == width);
         }
         Self(map.clone())
@@ -50,6 +58,19 @@ struct Player {
     side: Side,
     money: usize,
     live: usize,
+}
+
+impl Player {
+    fn from_stdin(side: Side) -> Self {
+        let mut input_line = String::new();
+        io::stdin().read_line(&mut input_line).unwrap();
+        let inputs = input_line.split(" ").collect::<Vec<_>>();
+        Self {
+            side: side,
+            money: inputs[0].trim().parse().unwrap(),
+            live: inputs[1].trim().parse().unwrap(),
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -117,30 +138,22 @@ fn main() {
     io::stdin().read_line(&mut input_line).unwrap();
     let player_id = parse_input!(input_line, i32);
     let map = Map::from_stdin();
-    dbg!("{map}");
-    // let mut input_line = String::new();
-    // io::stdin().read_line(&mut input_line).unwrap();
-    // let inputs = input_line.split(" ").collect::<Vec<_>>();
-    // let width = parse_input!(inputs[0], i32);
-    // let height = parse_input!(inputs[1], i32);
-    // for i in 0..height as usize {
-    //     let mut input_line = String::new();
-    //     io::stdin().read_line(&mut input_line).unwrap();
-    //     let line = input_line.trim_matches('\n').to_string();
-    // }
+    eprintln!("map \n{}", &map);
 
     // game loop
     loop {
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(" ").collect::<Vec<_>>();
-        let my_money = parse_input!(inputs[0], i32);
-        let my_lives = parse_input!(inputs[1], i32);
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(" ").collect::<Vec<_>>();
-        let opponent_money = parse_input!(inputs[0], i32);
-        let opponent_lives = parse_input!(inputs[1], i32);
+        let (me, opponent) = if player_id == 0 {
+            (
+                Player::from_stdin(Side::Left),
+                Player::from_stdin(Side::Right),
+            )
+        } else {
+            (
+                Player::from_stdin(Side::Right),
+                Player::from_stdin(Side::Left),
+            )
+        };
+
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let tower_count = parse_input!(input_line, i32);
