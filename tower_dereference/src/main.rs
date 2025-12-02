@@ -2,6 +2,7 @@
 use itertools::enumerate;
 use std::fmt;
 use std::io;
+use std::str::FromStr;
 
 macro_rules! parse_input {
     ($x:expr, $t:ident) => {
@@ -32,6 +33,7 @@ impl Map {
     fn size(&self) -> (usize, usize) {
         (self.0.len(), self.0.first().map_or(0, |elt| elt.len()))
     }
+
     fn from_stdin() -> Self {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
@@ -80,11 +82,22 @@ enum Side {
     Right,
 }
 
+impl From<&str> for Side {
+    fn from(s: &str) -> Self {
+        match s {
+            "0" => Self::Left,
+            "1" => Self::Right,
+            _ => panic!("unable to parse Side"),
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 struct Attacker {
     id: usize,
     owner: Side,
-    coordinates: (usize, usize),
+    // coordinates: (usize, usize),
+    coordinates: (f32, f32),
     hit_points: u32,
     max_hit_points: u32,
     current_speed: u32,
@@ -95,7 +108,22 @@ struct Attacker {
 
 impl Attacker {
     fn from_stdin() -> Self {
-        todo!()
+        let mut input_line = String::new();
+        io::stdin().read_line(&mut input_line).unwrap();
+        let inputs = input_line.trim().split(" ").collect::<Vec<_>>();
+        dbg!(&inputs);
+        debug_assert!(inputs.len() == 9);
+        Self {
+            id: inputs[0].parse().unwrap(),
+            owner: inputs[1].into(),
+            coordinates: (inputs[2].parse().unwrap(), inputs[3].parse().unwrap()),
+            hit_points: inputs[4].parse().unwrap(),
+            max_hit_points: inputs[5].parse().unwrap(),
+            current_speed: inputs[6].parse().unwrap(),
+            max_speed: inputs[7].parse().unwrap(),
+            slow_time: inputs[8].parse().unwrap(),
+            bounty: inputs[9].parse().unwrap(),
+        }
     }
 }
 
@@ -106,6 +134,60 @@ enum TowerType {
     Fire,
     Glue,
     Heal,
+}
+
+#[derive(Debug)]
+struct TowerParseError;
+
+impl fmt::Display for TowerType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Gun => "GUNTOWER",
+            Self::Fire => "FIRETOWER",
+            Self::Glue => "GLUETOWER",
+            Self::Heal => "HEALTOWER",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for TowerType {
+    type Err = TowerParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "GUNTOWER" => Ok(Self::Gun),
+            "FIRETOWER" => Ok(Self::Fire),
+            "GLUETOWER" => Ok(Self::Glue),
+            "HEALTOWER" => Ok(Self::Heal),
+            _ => Err(TowerParseError),
+        }
+    }
+}
+
+impl From<&str> for TowerType {
+    fn from(s: &str) -> Self {
+        Self::from_str(s).unwrap()
+    }
+}
+
+#[derive(Default, Debug)]
+enum UpgradeType {
+    #[default]
+    Damage,
+    Range,
+    Reload,
+}
+
+impl fmt::Display for UpgradeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Damage => "DAMAGE",
+            Self::Range => "RANGE",
+            Self::Reload => "RELOAD",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Default, Debug)]
@@ -119,6 +201,8 @@ struct Tower {
 
     /// number of turns left before being able to fire again
     cooldown: usize,
+
+    /// upgrade level of the tower
     damage_level: u8,
     range_level: u8,
     reload_level: u8,
@@ -126,7 +210,30 @@ struct Tower {
 
 impl Tower {
     fn from_stdin() -> Self {
-        todo!()
+        let mut input_line = String::new();
+        io::stdin().read_line(&mut input_line).unwrap();
+        let inputs = input_line.trim().split(" ").collect::<Vec<_>>();
+        dbg!(&inputs);
+        debug_assert!(inputs.len() == 9);
+
+        Self {
+            id: inputs[1].parse().unwrap(),
+            tower_type: inputs[0].into(),
+            owner: inputs[2].into(),
+            coordinates: (inputs[3].parse().unwrap(), inputs[4].parse().unwrap()),
+            damage: inputs[5].parse().unwrap(),
+            range: inputs[6].parse().unwrap(),
+            cooldown: inputs[8].parse().unwrap(),
+            ..Default::default()
+        }
+    }
+
+    fn upgradable(&self, up_type: UpgradeType) -> bool {
+        match up_type {
+            UpgradeType::Damage => self.damage_level < 3,
+            UpgradeType::Range => self.range_level < 3,
+            UpgradeType::Reload => self.reload_level < 3,
+        }
     }
 }
 
@@ -136,7 +243,7 @@ impl Tower {
 fn main() {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
-    let player_id = parse_input!(input_line, i32);
+    let player_id = parse_input!(input_line, u8);
     let map = Map::from_stdin();
     eprintln!("map \n{}", &map);
 
@@ -156,38 +263,17 @@ fn main() {
 
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let tower_count = parse_input!(input_line, i32);
-        for i in 0..tower_count as usize {
-            let mut input_line = String::new();
-            io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(" ").collect::<Vec<_>>();
-            let tower_type = inputs[0].trim().to_string();
-            let tower_id = parse_input!(inputs[1], i32);
-            let owner = parse_input!(inputs[2], i32);
-            let x = parse_input!(inputs[3], i32);
-            let y = parse_input!(inputs[4], i32);
-            let damage = parse_input!(inputs[5], i32);
-            let attack_range = parse_input!(inputs[6], f64);
-            let reload = parse_input!(inputs[7], i32);
-            let cool_down = parse_input!(inputs[8], i32);
+        let tower_count = parse_input!(input_line, usize);
+        for i in 0..tower_count {
+            let tower = Tower::from_stdin();
+            dbg!(tower);
         }
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let attacker_count = parse_input!(input_line, i32);
-        for i in 0..attacker_count as usize {
-            let mut input_line = String::new();
-            io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(" ").collect::<Vec<_>>();
-            let attacker_id = parse_input!(inputs[0], i32);
-            let owner = parse_input!(inputs[1], i32);
-            let x = parse_input!(inputs[2], f64);
-            let y = parse_input!(inputs[3], f64);
-            let hit_points = parse_input!(inputs[4], i32);
-            let max_hit_points = parse_input!(inputs[5], i32);
-            let current_speed = parse_input!(inputs[6], f64);
-            let max_speed = parse_input!(inputs[7], f64);
-            let slow_time = parse_input!(inputs[8], i32);
-            let bounty = parse_input!(inputs[9], i32);
+        let attacker_count = parse_input!(input_line, usize);
+        for i in 0..attacker_count {
+            let attacker = Attacker::from_stdin();
+            dbg!(attacker);
         }
 
         // Write an action using println!("message...");
