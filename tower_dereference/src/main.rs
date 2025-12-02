@@ -1,7 +1,10 @@
 // https://www.codingame.com/ide/puzzle/tower-dereference
 use itertools::enumerate;
+use itertools::iproduct;
 use std::fmt;
 use std::io;
+use std::ops::Add;
+use std::ops::Sub;
 use std::str::FromStr;
 
 macro_rules! parse_input {
@@ -32,6 +35,10 @@ impl fmt::Display for Map {
 impl Map {
     fn size(&self) -> (usize, usize) {
         (self.0.len(), self.0.first().map_or(0, |elt| elt.len()))
+    }
+
+    fn get(&self, coords: (usize, usize)) -> Option<char> {
+        self.0.get(coords.0)?.get(coords.1).copied()
     }
 
     fn from_stdin() -> Self {
@@ -111,12 +118,11 @@ impl Attacker {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.trim().split(" ").collect::<Vec<_>>();
-        dbg!(&inputs);
         debug_assert!(inputs.len() == 9);
         Self {
             id: inputs[0].parse().unwrap(),
             owner: inputs[1].into(),
-            coordinates: (inputs[2].parse().unwrap(), inputs[3].parse().unwrap()),
+            coordinates: (inputs[3].parse().unwrap(), inputs[2].parse().unwrap()),
             hit_points: inputs[4].parse().unwrap(),
             max_hit_points: inputs[5].parse().unwrap(),
             current_speed: inputs[6].parse().unwrap(),
@@ -195,6 +201,7 @@ struct Tower {
     id: usize,
     tower_type: TowerType,
     owner: Side,
+    /// screenwise coordinate (tof left, [lines, row])
     coordinates: (usize, usize),
     damage: usize,
     range: usize,
@@ -213,14 +220,13 @@ impl Tower {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.trim().split(" ").collect::<Vec<_>>();
-        dbg!(&inputs);
         debug_assert!(inputs.len() == 9);
 
         Self {
             id: inputs[1].parse().unwrap(),
             tower_type: inputs[0].into(),
             owner: inputs[2].into(),
-            coordinates: (inputs[3].parse().unwrap(), inputs[4].parse().unwrap()),
+            coordinates: (inputs[4].parse().unwrap(), inputs[3].parse().unwrap()),
             damage: inputs[5].parse().unwrap(),
             range: inputs[6].parse().unwrap(),
             cooldown: inputs[8].parse().unwrap(),
@@ -234,6 +240,117 @@ impl Tower {
             UpgradeType::Range => self.range_level < 3,
             UpgradeType::Reload => self.reload_level < 3,
         }
+    }
+}
+
+// TODO:
+// * is_command_feasable
+// * score_to_place_tower(map, attacker, tower_type)
+//   - close to paths
+//   - ahead of ennemies (attackers)
+//   - ahead of ennemy towers (heal)
+// * something to upgrade tower
+// * get_commands
+//
+
+#[derive(Default, Debug)]
+struct ScoreMap(Vec<Vec<i32>>);
+
+impl fmt::Display for ScoreMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "  {}\n",
+            (0..self.0.first().unwrap().len())
+                .map(|x| format!("{}", x % 10))
+                .collect::<String>()
+        )?;
+        for (num, v) in enumerate(&self.0) {
+            write!(f, "{} {}\n", num % 10, v.iter().map(|c| format!("{}", c)).collect::<String>())?
+        }
+        Ok(())
+    }
+}
+impl ScoreMap {
+    fn from_map(map: &Map) -> Self {
+        let range = 2;
+        let (l_num, c_num) = map.size();
+        let mut score = Self(vec![vec![0; c_num]; l_num]);
+
+        for (l, r) in iproduct!(0..l_num, 0..c_num) {
+            if map.get((l, r)) == Some('.') {
+                for c in score.get_neighbors((l, r), range) {
+                    score.0[c.0][c.1] += 1;
+                }
+                score.0[l][r] = 0;
+            }
+        }
+        eprintln!("{}", &score);
+        score
+    }
+
+    fn get_neighbors(&self, coords: (usize, usize), size: usize) -> Vec<(usize, usize)> {
+        let col_min = 0.max(coords.0 as i32 - size as i32) as usize;
+        let row_min = 0.max(coords.1 as i32 - size as i32) as usize;
+        let col_max = self.0.len().min(coords.0 + size);
+        let row_max = self.0.first().unwrap().len().min(coords.1 + size);
+        iproduct!(col_min..col_max, row_min..row_max)
+            .filter(|&a| a != coords)
+            .collect()
+    }
+
+    fn substract_towers(&mut self, towers: &[Tower]) {
+        for t in towers {
+            self.0[t.coordinates.0][t.coordinates.1] = 0;
+        }
+    }
+
+    /// Get preferences to place a tower
+    fn tower_preference(
+        map: &Map,
+        tower_type: TowerType,
+        attackers: &[Attacker],
+        towers: &[Tower],
+    ) -> Self {
+        todo!()
+    }
+
+    fn get_max(&self) -> (usize, usize) {
+        let (line_num, line) = (&self.0)
+            .into_iter()
+            .enumerate()
+            .max_by_key(|(_, row)| *row.iter().max().unwrap())
+            .unwrap();
+        let (col_num, _) = line
+            .into_iter()
+            .enumerate()
+            .max_by_key(|(_, v)| *v)
+            .unwrap();
+        (line_num, col_num)
+    }
+}
+
+impl Add for ScoreMap {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        let mut r = Self::default();
+        for (col, row) in iproduct!(0..self.0.len(), 0..self.0[0].len()) {
+            r.0[col][row] = self.0[col][row] + other.0[col][row]
+        }
+        r
+    }
+}
+
+impl Sub for ScoreMap {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        let mut r = Self::default();
+        for (col, row) in iproduct!(0..self.0.len(), 0..self.0[0].len()) {
+            r.0[col][row] = self.0[col][row] - other.0[col][row]
+        }
+        r
     }
 }
 
@@ -264,21 +381,27 @@ fn main() {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let tower_count = parse_input!(input_line, usize);
-        for i in 0..tower_count {
-            let tower = Tower::from_stdin();
-            dbg!(tower);
+        let mut towers = Vec::with_capacity(tower_count);
+        for _ in 0..tower_count {
+            towers.push(Tower::from_stdin());
         }
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let attacker_count = parse_input!(input_line, usize);
-        for i in 0..attacker_count {
-            let attacker = Attacker::from_stdin();
-            dbg!(attacker);
+        let mut attackers = Vec::with_capacity(attacker_count);
+        for _ in 0..attacker_count {
+            attackers.push(Attacker::from_stdin());
         }
 
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
 
-        println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
+        // XXX
+        // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
+        let mut score = ScoreMap::from_map(&map);
+        score.substract_towers(&towers);
+        let build_coords = score.get_max();
+        println! ("BUILD {} {} GUNTOWER", build_coords.1, build_coords.0);
+
     }
 }
