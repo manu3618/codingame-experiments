@@ -220,7 +220,7 @@ struct Tower {
     /// screenwise coordinate (tof left, [lines, row])
     coordinates: (usize, usize),
     damage: usize,
-    range: usize,
+    range: f64,
 
     /// number of turns left before being able to fire again
     cooldown: usize,
@@ -327,13 +327,14 @@ impl ScoreMap {
         attackers: &[Attacker],
         side: Side,
         prop: Property,
+        multiplier: i32,
     ) -> Self {
-        let range = 1;
+        let range = 2;
         let mut score = Self(vec![vec![0; size.0]; size.1]);
         for a in attackers.iter().filter(|x| x.owner == side) {
             let coords = (a.coordinates.0 as usize, a.coordinates.1 as usize);
             for c in score.get_neighbors(coords, range) {
-                score.0[c.0][c.1] += a.get_property(prop) as i32;
+                score.0[c.0][c.1] += multiplier * a.get_property(prop) as i32;
             }
         }
         score
@@ -344,8 +345,8 @@ impl ScoreMap {
             (0..size.1)
                 .map(|a| {
                     let m = match side {
-                        Side::Left => -1,
-                        Side::Right => 1,
+                        Side::Left => 1,
+                        Side::Right => -1,
                     };
                     m * (a as i32 - (size.1 as i32) / 2)
                 })
@@ -416,7 +417,9 @@ impl Sub for ScoreMap {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        let mut r = Self::default();
+        assert_eq!(self.size(), other.size());
+        let (l_num, c_num) = self.size();
+        let mut r = Self(vec![vec![0; c_num]; l_num]);
         for (col, row) in iproduct!(0..self.0.len(), 0..self.0[0].len()) {
             r.0[col][row] = self.0[col][row] - other.0[col][row]
         }
@@ -433,9 +436,36 @@ fn main() {
     let player_id = parse_input!(input_line, u8);
     let map = Map::from_stdin();
     eprintln!("map \n{}", &map);
+    let tower_types = [
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "FIRETOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GLUETOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "FIRETOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+        "GUNTOWER",
+    ];
+    let mut tower_types = tower_types.iter().cycle();
 
     // game loop
     loop {
+        let tower_type = tower_types.next().unwrap();
         let (me, opponent) = if player_id == 0 {
             (
                 Player::from_stdin(Side::Left),
@@ -471,10 +501,15 @@ fn main() {
         let mut score = ScoreMap::from_map(&map);
         score = score
             // + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::HitPoint)
-            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::Bounty)
+            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::Bounty, 3)
+            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::HitPoint, -1)
             + ScoreMap::from_side(map.size(), me.side);
         score.substract_towers(&towers);
         let build_coords = score.get_max();
-        println!("BUILD {} {} GUNTOWER", build_coords.1, build_coords.0);
+        if me.money >= 100 {
+            println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
+        } else {
+            println!("PASS");
+        }
     }
 }
