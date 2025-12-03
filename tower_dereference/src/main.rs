@@ -82,7 +82,7 @@ impl Player {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 enum Side {
     #[default]
     Left,
@@ -97,6 +97,14 @@ impl From<&str> for Side {
             _ => panic!("unable to parse Side"),
         }
     }
+}
+
+#[derive(Default, Debug, Copy, Clone)]
+enum Property {
+    #[default]
+    HitPoint,
+    Speed,
+    Bounty,
 }
 
 #[derive(Default, Debug)]
@@ -129,6 +137,14 @@ impl Attacker {
             max_speed: inputs[7].parse().unwrap(),
             slow_time: inputs[8].parse().unwrap(),
             bounty: inputs[9].parse().unwrap(),
+        }
+    }
+
+    fn get_property(&self, prop: Property) -> u32 {
+        match prop {
+            Property::Bounty => self.bounty,
+            Property::HitPoint => self.hit_points,
+            Property::Speed => self.current_speed,
         }
     }
 }
@@ -260,33 +276,82 @@ impl fmt::Display for ScoreMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "  {}\n",
+            "   {}\n",
             (0..self.0.first().unwrap().len())
-                .map(|x| format!("{}", x % 10))
+                .map(|x| format!("{:>2}", x))
                 .collect::<String>()
         )?;
         for (num, v) in enumerate(&self.0) {
-            write!(f, "{} {}\n", num % 10, v.iter().map(|c| format!("{}", c)).collect::<String>())?
+            write!(
+                f,
+                "{:>2} {}\n",
+                num,
+                v.iter().map(|c| format!("{:>2}", c)).collect::<String>()
+            )?
         }
         Ok(())
     }
 }
 impl ScoreMap {
     fn from_map(map: &Map) -> Self {
-        let range = 2;
+        let mut m = Self::from_map_with_range(&map, 0);
+        for r in 1..3 {
+            m = m + Self::from_map_with_range(&map, r);
+        }
+        let (l_num, c_num) = map.size();
+        for (l, r) in iproduct!(0..l_num, 0..c_num) {
+            if map.get((l, r)) == Some('.') {
+                m.0[l][r] = 0;
+            }
+        }
+        m
+    }
+
+    fn from_map_with_range(map: &Map, range: usize) -> Self {
+        let multiplier = 100;
         let (l_num, c_num) = map.size();
         let mut score = Self(vec![vec![0; c_num]; l_num]);
 
         for (l, r) in iproduct!(0..l_num, 0..c_num) {
             if map.get((l, r)) == Some('.') {
                 for c in score.get_neighbors((l, r), range) {
-                    score.0[c.0][c.1] += 1;
+                    score.0[c.0][c.1] += multiplier;
                 }
-                score.0[l][r] = 0;
             }
         }
-        eprintln!("{}", &score);
         score
+    }
+
+    fn from_attackers(
+        size: (usize, usize),
+        attackers: &[Attacker],
+        side: Side,
+        prop: Property,
+    ) -> Self {
+        let range = 1;
+        let mut score = Self(vec![vec![0; size.0]; size.1]);
+        for a in attackers.iter().filter(|x| x.owner == side) {
+            let coords = (a.coordinates.0 as usize, a.coordinates.1 as usize);
+            for c in score.get_neighbors(coords, range) {
+                score.0[c.0][c.1] += a.get_property(prop) as i32;
+            }
+        }
+        score
+    }
+
+    fn from_side(size: (usize, usize), side: Side) -> Self {
+        Self(vec![
+            (0..size.1)
+                .map(|a| {
+                    let m = match side {
+                        Side::Left => -1,
+                        Side::Right => 1,
+                    };
+                    m * (a as i32 - (size.1 as i32) / 2)
+                })
+                .collect::<Vec<_>>();
+            size.0
+        ])
     }
 
     fn get_neighbors(&self, coords: (usize, usize), size: usize) -> Vec<(usize, usize)> {
@@ -328,13 +393,18 @@ impl ScoreMap {
             .unwrap();
         (line_num, col_num)
     }
+    fn size(&self) -> (usize, usize) {
+        (self.0.len(), self.0[0].len())
+    }
 }
 
 impl Add for ScoreMap {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        let mut r = Self::default();
+        assert_eq!(self.size(), other.size());
+        let (l_num, c_num) = self.size();
+        let mut r = Self(vec![vec![0; c_num]; l_num]);
         for (col, row) in iproduct!(0..self.0.len(), 0..self.0[0].len()) {
             r.0[col][row] = self.0[col][row] + other.0[col][row]
         }
@@ -399,9 +469,12 @@ fn main() {
         // XXX
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         let mut score = ScoreMap::from_map(&map);
+        score = score
+            // + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::HitPoint)
+            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::Bounty)
+            + ScoreMap::from_side(map.size(), me.side);
         score.substract_towers(&towers);
         let build_coords = score.get_max();
-        println! ("BUILD {} {} GUNTOWER", build_coords.1, build_coords.0);
-
+        println!("BUILD {} {} GUNTOWER", build_coords.1, build_coords.0);
     }
 }
