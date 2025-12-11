@@ -25,7 +25,6 @@ enum Phase {
     Surfacing,
     /// Hide from monster
     Hiding,
-    Debug,
 }
 
 impl Phase {
@@ -33,7 +32,8 @@ impl Phase {
         match rand::thread_rng().gen_range(0..=3) {
             0 => Self::Capturing,
             1 => Self::Exploring,
-            2 => Self::Diving,
+            2 => Self::Capturing,
+            // 2 => Self::Diving,
             3 => Self::Surfacing,
             _ => unreachable!(),
         }
@@ -72,7 +72,8 @@ impl Drone {
 
     fn change_phase(&mut self) {
         if self.scanned_unsaved_creature.is_empty() {
-            self.phase = match rand::thread_rng().gen_range(0..=2) {
+            // self.phase = match rand::thread_rng().gen_range(0..=2) {
+            self.phase = match rand::thread_rng().gen_range(0..=1) {
                 0 => Phase::Capturing,
                 1 => Phase::Exploring,
                 2 => Phase::Diving,
@@ -155,7 +156,6 @@ impl Drone {
                 format!("WAIT {light}")
             }
             Phase::Surfacing => format!("MOVE {} 0 0", self.position.0),
-            Phase::Debug => format!("MOVE {} {} 0", self.position.0, self.position.1 + 10),
             Phase::Hiding => {
                 if self.scanned_unsaved_creature.is_empty() {
                     self.change_phase();
@@ -263,12 +263,12 @@ impl Drone {
 
     /// get movement to hide from monsters
     fn get_hiding_move(&self, creatures: &HashMap<u8, Creature>) -> (u32, u32) {
-        let monster_coords = &self.get_sorted_monster_coords(&creatures);
+        let monster_coords = &self.get_sorted_monster_coords(creatures);
         let nearest = monster_coords[0];
-        let direction = (
+        let direction = normalize((
             self.position.0 as i32 - nearest.0 as i32,
             self.position.1 as i32 - nearest.1 as i32,
-        );
+        ));
         (
             (self.position.0 as i32 + direction.0).min(10000).max(0) as u32,
             (self.position.1 as i32 + direction.1).min(10000).max(0) as u32,
@@ -703,6 +703,8 @@ fn parse_game_input(me: &mut Player, foe: &mut Player, creatures: &mut HashMap<u
                 continue;
             }
         }
+        // XXX
+        // TODO: estimate creature coordinates
         let radar = inputs[2].trim();
         if let Some(drone) = me.drones.iter_mut().find(|d| d.id == drone_id) {
             if creatures[&creature_id].color == -1 {
@@ -762,8 +764,7 @@ fn main() {
         let unsaved = me
             .drones
             .iter()
-            .map(|d| d.scanned_unsaved_creature.iter())
-            .flatten()
+            .flat_map(|d| d.scanned_unsaved_creature.iter())
             .collect::<Vec<_>>()
             .iter()
             .map(|&d| *d)
@@ -771,7 +772,7 @@ fn main() {
 
         for d in me.drones.iter_mut() {
             dbg!(d.get_monster_distance(&creatures));
-            if d.get_monster_distance(&creatures) < 1_000_000 {
+            if d.get_monster_distance(&creatures) < 4_000_000 {
                 d.phase = Phase::Hiding;
             }
             // change phase if drone are too close from each other
