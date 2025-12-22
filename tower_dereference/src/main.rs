@@ -4,6 +4,8 @@ use itertools::iproduct;
 use std::fmt;
 use std::io;
 use std::ops::Add;
+use std::ops::Mul;
+use std::ops::Neg;
 use std::ops::Sub;
 use std::str::FromStr;
 
@@ -292,6 +294,27 @@ impl fmt::Display for ScoreMap {
         Ok(())
     }
 }
+
+impl Mul<ScoreMap> for i32 {
+    type Output = ScoreMap;
+
+    fn mul(self, m: ScoreMap) -> ScoreMap {
+        ScoreMap(
+            m.0.iter()
+                .map(|v| v.iter().map(|x| self * x).collect())
+                .collect(),
+        )
+    }
+}
+
+impl Neg for ScoreMap {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        -1 * self
+    }
+}
+
 impl ScoreMap {
     fn from_map(map: &Map) -> Self {
         let mut m = Self::from_map_with_range(&map, 0);
