@@ -101,6 +101,15 @@ impl From<&str> for Side {
     }
 }
 
+impl Side {
+    fn invert(self) -> Self {
+        match self {
+            Self::Right => Self::Left,
+            Self::Left => Self::Right,
+        }
+    }
+}
+
 #[derive(Default, Debug, Copy, Clone)]
 enum Property {
     #[default]
@@ -398,10 +407,40 @@ impl ScoreMap {
     fn tower_preference(
         map: &Map,
         tower_type: TowerType,
+        my_side: Side,
         attackers: &[Attacker],
         towers: &[Tower],
     ) -> Self {
-        todo!()
+        match tower_type {
+            TowerType::Gun | TowerType::Fire => {
+                Self::from_attackers(
+                    map.size(),
+                    attackers,
+                    my_side.invert(),
+                    Property::HitPoint,
+                    -1,
+                ) + Self::from_attackers(
+                    map.size(),
+                    attackers,
+                    my_side.invert(),
+                    Property::Bounty,
+                    3,
+                )
+            }
+            TowerType::Glue => {
+                Self::from_attackers(map.size(), attackers, my_side.invert(), Property::Speed, 5)
+                    + Self::from_attackers(
+                        map.size(),
+                        attackers,
+                        my_side.invert(),
+                        Property::HitPoint,
+                        5,
+                    )
+            }
+            TowerType::Heal => {
+                Self::from_attackers(map.size(), attackers, my_side, Property::HitPoint, 30)
+            }
+        }
     }
 
     fn get_max(&self) -> (usize, usize) {
@@ -417,6 +456,16 @@ impl ScoreMap {
             .unwrap();
         (line_num, col_num)
     }
+
+    fn get_ordered_map(&self) -> Vec<(usize, usize)> {
+        let s = self.size();
+        let mut scores = iproduct!(0..s.0, 0..s.1)
+            .map(|(a, b)| (self.0[a][b], (a, b)))
+            .collect::<Vec<_>>();
+        scores.sort_by_key(|(s, _)| *s);
+        scores.iter().map(|(_, e)| e).copied().collect::<Vec<_>>()
+    }
+
     fn size(&self) -> (usize, usize) {
         (self.0.len(), self.0[0].len())
     }
