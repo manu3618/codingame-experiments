@@ -160,7 +160,7 @@ impl Attacker {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Copy)]
 enum TowerType {
     #[default]
     Gun,
@@ -387,6 +387,10 @@ impl ScoreMap {
         ])
     }
 
+    fn get(&self, coords: (usize, usize)) -> Option<i32> {
+        self.0.get(coords.0)?.get(coords.1).copied()
+    }
+
     fn get_neighbors(&self, coords: (usize, usize), size: usize) -> Vec<(usize, usize)> {
         let col_min = 0.max(coords.0 as i32 - size as i32) as usize;
         let row_min = 0.max(coords.1 as i32 - size as i32) as usize;
@@ -418,7 +422,7 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    -1,
+                    1,
                 ) + Self::from_attackers(
                     map.size(),
                     attackers,
@@ -510,34 +514,22 @@ fn main() {
     eprintln!("map \n{}", &map);
     let tower_types = [
         "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
         "FIRETOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
         "GLUETOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "FIRETOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
+        "HEALTOWER",
         "GUNTOWER",
         "GUNTOWER",
     ];
+    let tower_types = tower_types
+        .iter()
+        .map(|a| a.parse().unwrap())
+        .collect::<Vec<TowerType>>();
     let mut tower_types = tower_types.iter().cycle();
 
     // game loop
     loop {
-        let tower_type = tower_types.next().unwrap();
+        // TODO: logic to choose next tower type
+        let tower_type = tower_types.next().unwrap().clone();
         let (me, opponent) = if player_id == 0 {
             (
                 Player::from_stdin(Side::Left),
@@ -570,13 +562,14 @@ fn main() {
 
         // XXX
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
-        let mut score = ScoreMap::from_map(&map);
-        score = score
-            // + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::HitPoint)
-            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::Bounty, 3)
-            + ScoreMap::from_attackers(map.size(), &attackers, opponent.side, Property::HitPoint, -1)
-            + ScoreMap::from_side(map.size(), me.side);
+        let mut score = if attackers.len() == 0 {
+            ScoreMap::from_map(&map)
+        } else {
+            ScoreMap::tower_preference(&map, tower_type, me.side, &attackers, &towers)
+        };
         score.substract_towers(&towers);
+        dbg!(&score.get(score.get_max()));
+
         let build_coords = score.get_max();
         if me.money >= 100 {
             println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
