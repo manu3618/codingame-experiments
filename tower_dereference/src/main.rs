@@ -160,7 +160,7 @@ impl Attacker {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
 enum TowerType {
     #[default]
     Gun,
@@ -201,6 +201,12 @@ impl FromStr for TowerType {
 impl From<&str> for TowerType {
     fn from(s: &str) -> Self {
         Self::from_str(s).unwrap()
+    }
+}
+
+impl TowerType {
+    fn get_all() -> impl Iterator<Item = Self> {
+        vec![Self::Gun, Self::Fire, Self::Glue, Self::Heal].into_iter()
     }
 }
 
@@ -273,9 +279,9 @@ impl Tower {
 // TODO:
 // * is_command_feasable
 // * score_to_place_tower(map, attacker, tower_type)
-//   - close to paths
-//   - ahead of ennemies (attackers)
-//   - ahead of ennemy towers (heal)
+//   [x] close to paths
+//   [ ] ahead of ennemies (attackers)
+//   [ ] ahead of ennemy towers (heal)
 // * something to upgrade tower
 // * get_commands
 //
@@ -372,6 +378,27 @@ impl ScoreMap {
         score
     }
 
+    fn from_towers(
+        size: (usize, usize),
+        towers: &[Tower],
+        side: Side,
+        tower_types: &[TowerType],
+        multiplier: i32,
+    ) -> Self {
+        let mut score = Self(vec![vec![0; size.0]; size.1]);
+        for t in towers
+            .iter()
+            .filter(|x| x.owner == side && tower_types.contains(&x.tower_type))
+        {
+            let coords = (t.coordinates.0 as usize, t.coordinates.1 as usize);
+            for c in score.get_neighbors(coords, 1 + t.range as usize) {
+                score.0[c.0][c.1] += multiplier * t.range as i32;
+            }
+        }
+        score
+    }
+
+    /// positive values are towards side.
     fn from_side(size: (usize, usize), side: Side) -> Self {
         Self(vec![
             (0..size.1)
@@ -443,6 +470,14 @@ impl ScoreMap {
             }
             TowerType::Heal => {
                 Self::from_attackers(map.size(), attackers, my_side, Property::HitPoint, 30)
+                    + Self::from_towers(
+                        map.size(),
+                        towers,
+                        my_side.invert(),
+                        &[TowerType::Fire, TowerType::Gun],
+                        1,
+                    )
+                    + Self::from_side(map.size(), my_side.invert())
             }
         }
     }
@@ -528,8 +563,6 @@ fn main() {
 
     // game loop
     loop {
-        // TODO: logic to choose next tower type
-        let tower_type = tower_types.next().unwrap().clone();
         let (me, opponent) = if player_id == 0 {
             (
                 Player::from_stdin(Side::Left),
@@ -557,10 +590,37 @@ fn main() {
             attackers.push(Attacker::from_stdin());
         }
 
+        // TODO: logic to choose next tower type
+        // take decision based on max score for each type
+        let tower_prefs = TowerType::get_all()
+            .map(|t| {
+                (
+                    t,
+                    ScoreMap::tower_preference(&map, t, me.side, &attackers, &towers),
+                )
+            })
+            .map(|(tower_type, scoremap)| (tower_type, scoremap.get_max()))
+            .collect::<Vec<_>>();
+        dbg!(&tower_prefs);
+        let my_heal = &attackers
+            .iter()
+            .filter(|a| a.owner == me.side)
+            .map(|a| a.hit_points)
+            .collect::<Vec<_>>();
+        let opponent_heal = &attackers
+            .iter()
+            .filter(|a| a.owner == opponent.side)
+            .map(|a| a.hit_points)
+            .collect::<Vec<_>>();
+        dbg!(my_heal.iter().sum::<u32>() / my_heal.len() as u32);
+        dbg!(opponent_heal.iter().sum::<u32>() / opponent_heal.len() as u32);
+        // XXX
+        let tower_type = tower_types.next().unwrap().clone();
+
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
 
-        // XXX
+        // TODO
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         let mut score = if attackers.len() == 0 {
             ScoreMap::from_map(&map)
@@ -568,7 +628,6 @@ fn main() {
             ScoreMap::tower_preference(&map, tower_type, me.side, &attackers, &towers)
         };
         score.substract_towers(&towers);
-        dbg!(&score.get(score.get_max()));
 
         let build_coords = score.get_max();
         if me.money >= 100 {
