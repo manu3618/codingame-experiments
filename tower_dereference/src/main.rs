@@ -342,6 +342,9 @@ impl Neg for ScoreMap {
 }
 
 impl ScoreMap {
+    fn with_value(size: (usize, usize), value: i32) -> Self {
+        Self(vec![vec![value; size.1]; size.0])
+    }
     fn from_map(map: &Map) -> Self {
         let mut m = Self::from_map_with_range(&map, 0);
         for r in 1..3 {
@@ -402,7 +405,7 @@ impl ScoreMap {
             .filter(|x| x.owner == side && tower_types.contains(&x.tower_type))
         {
             let coords = (t.coordinates.0 as usize, t.coordinates.1 as usize);
-            for c in score.get_neighbors(coords, 1 + t.range as usize) {
+            for c in score.get_neighbors(coords, t.range as usize) {
                 score.0[c.0][c.1] += multiplier * t.range as i32;
             }
         }
@@ -454,13 +457,13 @@ impl ScoreMap {
         towers: &[Tower],
     ) -> Self {
         match tower_type {
-            TowerType::Gun | TowerType::Fire => {
+            TowerType::Gun => {
                 Self::from_attackers(
                     map.size(),
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    1,
+                    3,
                 ) + Self::from_attackers(
                     map.size(),
                     attackers,
@@ -468,6 +471,27 @@ impl ScoreMap {
                     Property::Bounty,
                     3,
                 )
+
+                    + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
+                    + Self::from_map(&map)
+            }
+            TowerType::Fire => {
+                Self::from_attackers(
+                    map.size(),
+                    attackers,
+                    my_side.invert(),
+                    Property::HitPoint,
+                    2,
+                ) + Self::from_attackers(
+                    map.size(),
+                    attackers,
+                    my_side.invert(),
+                    Property::Bounty,
+                    2,
+                ) + Self::from_map(&map)
+
+                    + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
+                    + Self::from_side(map.size(), my_side.invert())
             }
             TowerType::Glue => {
                 Self::from_attackers(map.size(), attackers, my_side.invert(), Property::Speed, 5)
@@ -478,9 +502,18 @@ impl ScoreMap {
                         Property::HitPoint,
                         5,
                     )
+                    - Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 100)
+                    + Self::from_towers(
+                        map.size(),
+                        towers,
+                        my_side,
+                        &[TowerType::Fire, TowerType::Gun],
+                        1,
+                    )
+                    - Self::with_value(map.size(), towers.iter().filter(|t| t.tower_type == TowerType::Glue ).count() as i32)
             }
             TowerType::Heal => {
-                Self::from_attackers(map.size(), attackers, my_side, Property::None, 30)
+                Self::from_attackers(map.size(), attackers, my_side, Property::None, 10)
                     - Self::from_attackers(map.size(), attackers, my_side, Property::HitPoint, 1)
                     + Self::from_towers(
                         map.size(),
@@ -490,6 +523,7 @@ impl ScoreMap {
                         1,
                     )
                     + Self::from_side(map.size(), my_side.invert())
+                    + Self::from_map(&map)
             }
         }
     }
@@ -562,19 +596,6 @@ fn main() {
     let player_id = parse_input!(input_line, u8);
     let map = Map::from_stdin();
     eprintln!("map \n{}", &map);
-    let tower_types = [
-        "GUNTOWER",
-        "FIRETOWER",
-        "GLUETOWER",
-        "HEALTOWER",
-        "GUNTOWER",
-        "GUNTOWER",
-    ];
-    let tower_types = tower_types
-        .iter()
-        .map(|a| a.parse().unwrap())
-        .collect::<Vec<TowerType>>();
-    let mut tower_types = tower_types.iter().cycle();
 
     // game loop
     loop {
@@ -607,7 +628,7 @@ fn main() {
 
         // TODO: logic to choose next tower type
         // take decision based on max score for each type
-        let tower_prefs = TowerType::get_all()
+        let tower_prefs: HashMap<TowerType, _> = TowerType::get_all()
             .map(|t| {
                 (
                     t,
@@ -615,22 +636,40 @@ fn main() {
                 )
             })
             .map(|(tower_type, scoremap)| (tower_type, scoremap.get_max()))
-            .collect::<Vec<_>>();
+            .collect();
         dbg!(&tower_prefs);
         let my_heal = &attackers
             .iter()
             .filter(|a| a.owner == me.side)
             .map(|a| a.hit_points)
             .collect::<Vec<_>>();
+        dbg!(my_heal.iter().sum::<u32>() / (1 + my_heal.len() as u32));
         let opponent_heal = &attackers
             .iter()
             .filter(|a| a.owner == opponent.side)
             .map(|a| a.hit_points)
             .collect::<Vec<_>>();
-        dbg!(my_heal.iter().sum::<u32>() / my_heal.len() as u32);
-        dbg!(opponent_heal.iter().sum::<u32>() / opponent_heal.len() as u32);
+        dbg!(opponent_heal.iter().sum::<u32>() / (1 + opponent_heal.len() as u32));
+        let mut tower_type = TowerType::Gun;
+        if my_heal.len() > 0
+            && (my_heal.iter().sum::<u32>() / my_heal.len() as u32) < 4
+            && tower_prefs.get(&TowerType::Heal).unwrap_or(&0) > &30
+        {
+            tower_type = TowerType::Heal
+        }
+        if tower_prefs.get(&TowerType::Glue).unwrap_or(&0) > &600 {
+            tower_type = TowerType::Glue
+        }
+        if tower_prefs.get(&TowerType::Fire).unwrap_or(&0) > &1600
+            && tower_prefs.get(&TowerType::Fire) > tower_prefs.get(&TowerType::Glue)
+        {
+            tower_type = TowerType::Fire
+        }
+        if me.live < 3 {
+            dbg!("Ultime chance");
+            tower_type = TowerType::Heal
+        }
         // XXX
-        let tower_type = tower_types.next().unwrap().clone();
 
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
