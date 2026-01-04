@@ -211,6 +211,14 @@ impl TowerType {
     fn get_all() -> impl Iterator<Item = Self> {
         vec![Self::Gun, Self::Fire, Self::Glue, Self::Heal].into_iter()
     }
+    fn price(&self) -> usize {
+        match &self {
+            Self::Gun => 100,
+            Self::Fire => 100,
+            Self::Glue => 70,
+            Self::Heal => 100,
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -630,14 +638,14 @@ fn main() {
         // TODO
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         let mut score = if attackers.len() == 0 {
-            ScoreMap::from_map(&map)
+            3 * ScoreMap::from_map(&map) + ScoreMap::from_side(map.size(), me.side)
         } else {
             ScoreMap::tower_preference(&map, tower_type, me.side, &attackers, &towers)
         };
         score.substract_towers(&towers);
 
         let build_coords = score.get_whichmax();
-        if me.money >= 100 {
+        if me.money >= tower_type.price() {
             println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
         } else {
             println!("PASS");
