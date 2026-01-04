@@ -1,6 +1,7 @@
 // https://www.codingame.com/ide/puzzle/tower-dereference
 use itertools::enumerate;
 use itertools::iproduct;
+use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::ops::Add;
@@ -116,6 +117,7 @@ enum Property {
     HitPoint,
     Speed,
     Bounty,
+    None,
 }
 
 #[derive(Default, Debug)]
@@ -156,11 +158,12 @@ impl Attacker {
             Property::Bounty => self.bounty,
             Property::HitPoint => self.hit_points,
             Property::Speed => self.current_speed,
+            Property::None => 1,
         }
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum TowerType {
     #[default]
     Gun,
@@ -469,7 +472,8 @@ impl ScoreMap {
                     )
             }
             TowerType::Heal => {
-                Self::from_attackers(map.size(), attackers, my_side, Property::HitPoint, 30)
+                Self::from_attackers(map.size(), attackers, my_side, Property::None, 30)
+                    - Self::from_attackers(map.size(), attackers, my_side, Property::HitPoint, 1)
                     + Self::from_towers(
                         map.size(),
                         towers,
@@ -482,7 +486,10 @@ impl ScoreMap {
         }
     }
 
-    fn get_max(&self) -> (usize, usize) {
+    fn get_max(&self) -> i32 {
+        *self.0.iter().flatten().max().unwrap()
+    }
+    fn get_whichmax(&self) -> (usize, usize) {
         let (line_num, line) = (&self.0)
             .into_iter()
             .enumerate()
@@ -629,7 +636,7 @@ fn main() {
         };
         score.substract_towers(&towers);
 
-        let build_coords = score.get_max();
+        let build_coords = score.get_whichmax();
         if me.money >= 100 {
             println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
         } else {
