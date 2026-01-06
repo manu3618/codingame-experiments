@@ -537,13 +537,13 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    3,
+                    5,
                 ) + Self::from_attackers(
                     map.size(),
                     attackers,
                     my_side.invert(),
                     Property::Bounty,
-                    3,
+                    1,
                 ) + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
                     + Self::from_map(map)
             }
@@ -553,13 +553,7 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    2,
-                ) + Self::from_attackers(
-                    map.size(),
-                    attackers,
-                    my_side.invert(),
-                    Property::Bounty,
-                    2,
+                    5,
                 ) + Self::from_map(map)
                     + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
                     + Self::from_side(map.size(), my_side.invert())
@@ -583,7 +577,7 @@ impl ScoreMap {
                     )
                     - Self::with_value(
                         map.size(),
-                        towers
+                        10 * towers
                             .iter()
                             .filter(|t| t.tower_type == TowerType::Glue)
                             .count() as i32,
@@ -828,7 +822,7 @@ fn main() {
             coords: build_coords,
             tower_type,
         };
-        let nums: Vec<usize> = (1..100).collect();
+        let nums: Vec<usize> = (1..500).collect();
         if nums.choose(&mut rng).unwrap() < &towers.len() {
             let upgrade_commands = get_upgrade_commands(&towers, me.side);
             if let Some(c) = upgrade_commands.first() {
