@@ -22,15 +22,15 @@ struct Map(Vec<Vec<char>>);
 
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
+        writeln!(
             f,
-            "  {}\n",
+            "  {}",
             (0..self.0.first().unwrap().len())
                 .map(|x| format!("{}", x % 10))
                 .collect::<String>()
         )?;
         for (num, v) in enumerate(&self.0) {
-            write!(f, "{} {}\n", num % 10, v.iter().collect::<String>())?
+            writeln!(f, "{} {}", num % 10, v.iter().collect::<String>())?
         }
         Ok(())
     }
@@ -59,7 +59,7 @@ impl Map {
         for _ in 0..height {
             input_line.clear();
             io::stdin().read_line(&mut input_line).unwrap();
-            map.push(input_line.trim().chars().into_iter().collect::<Vec<_>>());
+            map.push(input_line.trim().chars().collect::<Vec<_>>());
             debug_assert!(map.last().unwrap().len() == width);
         }
         Self(map.clone())
@@ -374,7 +374,7 @@ impl Tower {
 //   [ ] ahead of ennemy towers (heal)
 // * something to upgrade tower
 //   [ ] early
-//   [ ] choose which one (near enemy side?)
+//   [ ] choose which one (near enemy side? cost based?)
 //   [ ] choose characteristic to upgrade
 // * get_commands
 //   [ ] emit single command if possible
@@ -386,17 +386,17 @@ struct ScoreMap(Vec<Vec<i32>>);
 
 impl fmt::Display for ScoreMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
+        writeln!(
             f,
-            "   {}\n",
+            "   {}",
             (0..self.0.first().unwrap().len())
                 .map(|x| format!("{:>2}", x))
                 .collect::<String>()
         )?;
         for (num, v) in enumerate(&self.0) {
-            write!(
+            writeln!(
                 f,
-                "{:>2} {}\n",
+                "{:>2} {}",
                 num,
                 v.iter().map(|c| format!("{:>2}", c)).collect::<String>()
             )?
@@ -430,9 +430,9 @@ impl ScoreMap {
         Self(vec![vec![value; size.1]; size.0])
     }
     fn from_map(map: &Map) -> Self {
-        let mut m = Self::from_map_with_range(&map, 0);
+        let mut m = Self::from_map_with_range(map, 0);
         for r in 1..3 {
-            m = m + Self::from_map_with_range(&map, r);
+            m = m + Self::from_map_with_range(map, r);
         }
         let (l_num, c_num) = map.size();
         for (l, r) in iproduct!(0..l_num, 0..c_num) {
@@ -488,7 +488,7 @@ impl ScoreMap {
             .iter()
             .filter(|x| x.owner == side && tower_types.contains(&x.tower_type))
         {
-            let coords = (t.coordinates.0 as usize, t.coordinates.1 as usize);
+            let coords = (t.coordinates.0, t.coordinates.1);
             for c in score.get_neighbors(coords, t.range as usize) {
                 score.0[c.0][c.1] += multiplier * t.range as i32;
             }
@@ -555,7 +555,7 @@ impl ScoreMap {
                     Property::Bounty,
                     3,
                 ) + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
-                    + Self::from_map(&map)
+                    + Self::from_map(map)
             }
             TowerType::Fire => {
                 Self::from_attackers(
@@ -570,7 +570,7 @@ impl ScoreMap {
                     my_side.invert(),
                     Property::Bounty,
                     2,
-                ) + Self::from_map(&map)
+                ) + Self::from_map(map)
                     + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
                     + Self::from_side(map.size(), my_side.invert())
             }
@@ -610,7 +610,7 @@ impl ScoreMap {
                         1,
                     )
                     + Self::from_side(map.size(), my_side.invert())
-                    + Self::from_map(&map)
+                    + Self::from_map(map)
             }
         }
     }
@@ -619,16 +619,12 @@ impl ScoreMap {
         *self.0.iter().flatten().max().unwrap()
     }
     fn get_whichmax(&self) -> (usize, usize) {
-        let (line_num, line) = (&self.0)
-            .into_iter()
+        let (line_num, line) = (self.0)
+            .iter()
             .enumerate()
             .max_by_key(|(_, row)| *row.iter().max().unwrap())
             .unwrap();
-        let (col_num, _) = line
-            .into_iter()
-            .enumerate()
-            .max_by_key(|(_, v)| *v)
-            .unwrap();
+        let (col_num, _) = line.iter().enumerate().max_by_key(|(_, v)| *v).unwrap();
         (line_num, col_num)
     }
 
@@ -713,7 +709,7 @@ impl Command {
                 tower_id: i,
                 upgrade_type: u,
             } => {
-                let t = &towers.iter().filter(|t| t.id == *i).next()?;
+                let t = &towers.iter().find(|t| t.id == *i)?;
                 t.upgrade_cost(*u)
             }
         }
@@ -802,7 +798,7 @@ fn main() {
             .collect::<Vec<_>>();
         dbg!(opponent_heal.iter().sum::<u32>() / (1 + opponent_heal.len() as u32));
         let mut tower_type = TowerType::Gun;
-        if my_heal.len() > 0
+        if !my_heal.is_empty()
             && (my_heal.iter().sum::<u32>() / my_heal.len() as u32) < 4
             && tower_prefs.get(&TowerType::Heal).unwrap_or(&0) > &30
         {
@@ -827,7 +823,7 @@ fn main() {
         // TODO
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
-        let mut score = if attackers.len() == 0 {
+        let mut score = if attackers.is_empty() {
             3 * ScoreMap::from_map(&map) + ScoreMap::from_side(map.size(), me.side)
         } else {
             ScoreMap::tower_preference(&map, tower_type, me.side, &attackers, &towers)
@@ -838,7 +834,7 @@ fn main() {
         let build_coords = score.get_whichmax();
         let mut command = Command::Build {
             coords: build_coords,
-            tower_type: tower_type,
+            tower_type,
         };
         let nums: Vec<usize> = (1..100).collect();
         if nums.choose(&mut rng).unwrap() < &towers.len() {
