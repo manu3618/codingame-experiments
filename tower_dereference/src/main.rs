@@ -1,6 +1,7 @@
 // https://www.codingame.com/ide/puzzle/tower-dereference
 use itertools::enumerate;
 use itertools::iproduct;
+use rand::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
@@ -221,7 +222,7 @@ impl TowerType {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Copy, Clone)]
 enum UpgradeType {
     #[default]
     Damage,
@@ -237,6 +238,12 @@ impl fmt::Display for UpgradeType {
             Self::Reload => "RELOAD",
         };
         write!(f, "{}", s)
+    }
+}
+
+impl UpgradeType {
+    fn get_all() -> Vec<Self> {
+        vec![Self::Damage, Self::Range, Self::Reload]
     }
 }
 
@@ -294,7 +301,6 @@ impl Tower {
     /// Get the cost for specific upgrades
     /// If upgrade is not possible, returns None
     fn upgrade_cost(&self, up_type: UpgradeType) -> Option<usize> {
-        // XXX
         let curr_level = match up_type {
             UpgradeType::Damage => self.damage_level,
             UpgradeType::Range => self.range_level,
@@ -668,6 +674,7 @@ impl Sub for ScoreMap {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Command {
     Build {
         coords: (usize, usize),
@@ -694,10 +701,46 @@ impl fmt::Display for Command {
     }
 }
 
+impl Command {
+    /// If the command is possible, get its price
+    fn get_price(&self, towers: &[Tower]) -> Option<usize> {
+        match self {
+            Self::Build {
+                coords: _,
+                tower_type: t,
+            } => Some(t.price()),
+            Self::Upgrade {
+                tower_id: i,
+                upgrade_type: u,
+            } => {
+                let t = &towers.iter().filter(|t| t.id == *i).next()?;
+                t.upgrade_cost(*u)
+            }
+        }
+    }
+}
+
+// get possible upgrade commands
+fn get_upgrade_commands(towers: &[Tower]) -> Vec<Command> {
+    let mut c = iproduct!(UpgradeType::get_all(), towers)
+        .map(|(u, t)| (u, t, t.upgrade_cost(u)))
+        .filter(|(_, _, c)| c.is_some())
+        .map(|(u, t, c)| (u, t, c.unwrap()))
+        .collect::<Vec<_>>();
+    c.sort_by(|(_, _, a), (_, _, b)| a.cmp(b)); // asc sort
+    c.iter()
+        .map(|(u, t, _)| Command::Upgrade {
+            tower_id: t.id,
+            upgrade_type: *u,
+        })
+        .collect()
+}
+
 /**
  * Survive the attack waves
  **/
 fn main() {
+    let mut rng = rand::rng();
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
     let player_id = parse_input!(input_line, u8);
@@ -777,7 +820,6 @@ fn main() {
             dbg!("Ultime chance");
             tower_type = TowerType::Heal
         }
-        // XXX
 
         // Write an action using println!("message...");
         // To debug: eprintln!("Debug message...");
@@ -792,24 +834,23 @@ fn main() {
         };
         score.substract_towers(&towers);
 
+        // XXX
         let build_coords = score.get_whichmax();
-        if me.money >= tower_type.price() {
-            println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
+        let mut command = Command::Build {
+            coords: build_coords,
+            tower_type: tower_type,
+        };
+        let nums: Vec<usize> = (1..100).collect();
+        if nums.choose(&mut rng).unwrap() < &towers.len() {
+            let upgrade_commands = get_upgrade_commands(&towers);
+            if let Some(c) = upgrade_commands.first() {
+                command = c.clone();
+            }
+        }
+        if me.money >= command.get_price(&towers).unwrap_or(me.money + 1) {
+            println!("{}", command);
         } else {
-            let tower_id = &towers
-                .iter()
-                .filter(|t| t.owner == me.side)
-                .map(|t| t.id)
-                .min()
-                .unwrap();
-            println!(
-                "{}",
-                Command::Upgrade {
-                    tower_id: *tower_id,
-                    upgrade_type: UpgradeType::Range
-                }
-            );
-            // println!("PASS");
+            println!("PASS")
         }
     }
 }
