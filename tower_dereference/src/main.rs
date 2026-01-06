@@ -247,7 +247,7 @@ impl UpgradeType {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 struct Tower {
     id: usize,
     tower_type: TowerType,
@@ -256,6 +256,7 @@ struct Tower {
     coordinates: (usize, usize),
     damage: usize,
     range: f64,
+    reload: usize,
 
     /// number of turns left before being able to fire again
     cooldown: usize,
@@ -280,13 +281,12 @@ impl Tower {
             coordinates: (inputs[4].parse().unwrap(), inputs[3].parse().unwrap()),
             damage: inputs[5].parse().unwrap(),
             range: inputs[6].parse().unwrap(),
-            cooldown: inputs[8].parse().unwrap(),
+            reload: inputs[8].parse().unwrap(),
             ..Default::default()
         };
 
         t.damage_level = t.damage_level();
         t.range_level = t.range_level();
-        t.reload_level = t.reload_level();
         t
     }
 
@@ -349,20 +349,10 @@ impl Tower {
     }
 
     // get reload level based on characteristics
-    fn reload_level(&self) -> u8 {
-        let reloads_boundaries = match &self.tower_type {
-            TowerType::Gun => [5, 4, 3, 2],
-            TowerType::Fire => [8, 7, 6, 5],
-            TowerType::Glue => [4, 3, 2, 1],
-            TowerType::Heal => [5, 4, 3, 2],
-        };
-        for (l, c) in enumerate(reloads_boundaries) {
-            if self.cooldown == c {
-                return l as u8;
-            }
+    fn update_reload_level(&mut self, towers: &[Tower]) {
+        if let Some(t) = towers.iter().find(|t| t.id == self.id) {
+            self.reload_level = t.reload_level;
         }
-        dbg!(&self);
-        unreachable!("unwknown reload")
     }
 }
 
@@ -717,10 +707,10 @@ impl Command {
 }
 
 // get possible upgrade commands
-fn get_upgrade_commands(towers: &[Tower]) -> Vec<Command> {
+fn get_upgrade_commands(towers: &[Tower], me: Side) -> Vec<Command> {
     let mut c = iproduct!(UpgradeType::get_all(), towers)
         .map(|(u, t)| (u, t, t.upgrade_cost(u)))
-        .filter(|(_, _, c)| c.is_some())
+        .filter(|(_, t, c)| t.owner == me && c.is_some())
         .map(|(u, t, c)| (u, t, c.unwrap()))
         .collect::<Vec<_>>();
     c.sort_by(|(_, _, a), (_, _, b)| a.cmp(b)); // asc sort
@@ -742,6 +732,7 @@ fn main() {
     let player_id = parse_input!(input_line, u8);
     let map = Map::from_stdin();
     eprintln!("map \n{}", &map);
+    let mut previous_towers = Vec::new();
 
     // game loop
     loop {
@@ -762,9 +753,10 @@ fn main() {
         let tower_count = parse_input!(input_line, usize);
         let mut towers = Vec::with_capacity(tower_count);
         for _ in 0..tower_count {
-            towers.push(Tower::from_stdin());
+            let mut t = Tower::from_stdin();
+            t.update_reload_level(&previous_towers);
+            towers.push(t);
         }
-        dbg!(&towers);
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let attacker_count = parse_input!(input_line, usize);
@@ -838,15 +830,37 @@ fn main() {
         };
         let nums: Vec<usize> = (1..100).collect();
         if nums.choose(&mut rng).unwrap() < &towers.len() {
-            let upgrade_commands = get_upgrade_commands(&towers);
+            let upgrade_commands = get_upgrade_commands(&towers, me.side);
             if let Some(c) = upgrade_commands.first() {
                 command = c.clone();
             }
         }
         if me.money >= command.get_price(&towers).unwrap_or(me.money + 1) {
             println!("{}", command);
+            match command {
+                Command::Upgrade {
+                    tower_id: i,
+                    upgrade_type: UpgradeType::Reload,
+                } => {
+                    previous_towers = previous_towers
+                        .drain(..)
+                        .map(|t: Tower| {
+                            if t.id == i {
+                                Tower {
+                                    reload_level: t.reload_level + 1,
+                                    ..t
+                                }
+                            } else {
+                                t
+                            }
+                        })
+                        .collect();
+                }
+                _ => {}
+            }
         } else {
             println!("PASS")
         }
+        previous_towers = towers.clone();
     }
 }
