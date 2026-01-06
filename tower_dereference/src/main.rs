@@ -266,7 +266,7 @@ impl Tower {
         let inputs = input_line.trim().split(" ").collect::<Vec<_>>();
         debug_assert!(inputs.len() == 9);
 
-        Self {
+        let mut t = Self {
             id: inputs[1].parse().unwrap(),
             tower_type: inputs[0].into(),
             owner: inputs[2].into(),
@@ -275,15 +275,88 @@ impl Tower {
             range: inputs[6].parse().unwrap(),
             cooldown: inputs[8].parse().unwrap(),
             ..Default::default()
-        }
+        };
+
+        t.damage_level = t.damage_level();
+        t.range_level = t.range_level();
+        t.reload_level = t.reload_level();
+        t
     }
 
-    fn upgradable(&self, up_type: UpgradeType) -> bool {
+    fn is_upgradable(&self, up_type: UpgradeType) -> bool {
         match up_type {
             UpgradeType::Damage => self.damage_level < 3,
             UpgradeType::Range => self.range_level < 3,
             UpgradeType::Reload => self.reload_level < 3,
         }
+    }
+
+    /// Get the cost for specific upgrades
+    /// If upgrade is not possible, returns None
+    fn upgrade_cost(&self, up_type: UpgradeType) -> Option<usize> {
+        // XXX
+        let curr_level = match up_type {
+            UpgradeType::Damage => self.damage_level,
+            UpgradeType::Range => self.range_level,
+            UpgradeType::Reload => self.reload_level,
+        };
+        match curr_level {
+            0 => Some(50),
+            1 => Some(100),
+            2 => Some(150),
+            _ => None,
+        }
+    }
+
+    // get damage level based on characteristics
+    fn damage_level(&self) -> u8 {
+        let damages_boundaries = match &self.tower_type {
+            TowerType::Gun => [5, 8, 15, 30],
+            TowerType::Fire => [2, 3, 5, 7],
+            TowerType::Glue => [8, 15, 25, 40],
+            TowerType::Heal => [5, 8, 15, 30],
+        };
+        for (l, d) in enumerate(damages_boundaries) {
+            if self.damage == d {
+                return l as u8;
+            }
+        }
+        dbg!(&self);
+        unreachable!("unwknown damage")
+    }
+
+    // get range level based on characteristics
+    fn range_level(&self) -> u8 {
+        let ranges_boundaries = match &self.tower_type {
+            TowerType::Gun => [3.0, 4.0, 5.0, 6.0],
+            TowerType::Fire => [1.5, 2.0, 2.3, 2.5],
+            TowerType::Glue => [3.0, 4.0, 5.0, 6.0],
+            TowerType::Heal => [3.0, 4.0, 5.0, 6.0],
+        };
+        for (l, r) in enumerate(ranges_boundaries) {
+            if self.range == r {
+                return l as u8;
+            }
+        }
+        dbg!(&self);
+        unreachable!("unwknown range")
+    }
+
+    // get reload level based on characteristics
+    fn reload_level(&self) -> u8 {
+        let reloads_boundaries = match &self.tower_type {
+            TowerType::Gun => [5, 4, 3, 2],
+            TowerType::Fire => [8, 7, 6, 5],
+            TowerType::Glue => [4, 3, 2, 1],
+            TowerType::Heal => [5, 4, 3, 2],
+        };
+        for (l, c) in enumerate(reloads_boundaries) {
+            if self.cooldown == c {
+                return l as u8;
+            }
+        }
+        dbg!(&self);
+        unreachable!("unwknown reload")
     }
 }
 
@@ -291,10 +364,15 @@ impl Tower {
 // * is_command_feasable
 // * score_to_place_tower(map, attacker, tower_type)
 //   [x] close to paths
-//   [ ] ahead of ennemies (attackers)
+//   [X] ahead of ennemies (attackers)
 //   [ ] ahead of ennemy towers (heal)
 // * something to upgrade tower
+//   [ ] early
+//   [ ] choose which one (near enemy side?)
+//   [ ] choose characteristic to upgrade
 // * get_commands
+//   [ ] emit single command if possible
+//   [ ] emit multiple command if possible
 //
 
 #[derive(Default, Debug)]
@@ -470,9 +548,7 @@ impl ScoreMap {
                     my_side.invert(),
                     Property::Bounty,
                     3,
-                )
-
-                    + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
+                ) + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
                     + Self::from_map(&map)
             }
             TowerType::Fire => {
@@ -489,7 +565,6 @@ impl ScoreMap {
                     Property::Bounty,
                     2,
                 ) + Self::from_map(&map)
-
                     + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
                     + Self::from_side(map.size(), my_side.invert())
             }
@@ -510,7 +585,13 @@ impl ScoreMap {
                         &[TowerType::Fire, TowerType::Gun],
                         1,
                     )
-                    - Self::with_value(map.size(), towers.iter().filter(|t| t.tower_type == TowerType::Glue ).count() as i32)
+                    - Self::with_value(
+                        map.size(),
+                        towers
+                            .iter()
+                            .filter(|t| t.tower_type == TowerType::Glue)
+                            .count() as i32,
+                    )
             }
             TowerType::Heal => {
                 Self::from_attackers(map.size(), attackers, my_side, Property::None, 10)
@@ -587,6 +668,32 @@ impl Sub for ScoreMap {
     }
 }
 
+enum Command {
+    Build {
+        coords: (usize, usize),
+        tower_type: TowerType,
+    },
+    Upgrade {
+        tower_id: usize,
+        upgrade_type: UpgradeType,
+    },
+}
+
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Build {
+                coords: c,
+                tower_type: t,
+            } => write!(f, "BUILD {} {} {}", c.1, c.0, t),
+            Self::Upgrade {
+                tower_id: i,
+                upgrade_type: u,
+            } => write!(f, "UPGRADE {} {}", i, u),
+        }
+    }
+}
+
 /**
  * Survive the attack waves
  **/
@@ -618,6 +725,7 @@ fn main() {
         for _ in 0..tower_count {
             towers.push(Tower::from_stdin());
         }
+        dbg!(&towers);
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let attacker_count = parse_input!(input_line, usize);
@@ -676,6 +784,7 @@ fn main() {
 
         // TODO
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
+        // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         let mut score = if attackers.len() == 0 {
             3 * ScoreMap::from_map(&map) + ScoreMap::from_side(map.size(), me.side)
         } else {
@@ -687,7 +796,20 @@ fn main() {
         if me.money >= tower_type.price() {
             println!("BUILD {} {} {}", build_coords.1, build_coords.0, tower_type);
         } else {
-            println!("PASS");
+            let tower_id = &towers
+                .iter()
+                .filter(|t| t.owner == me.side)
+                .map(|t| t.id)
+                .min()
+                .unwrap();
+            println!(
+                "{}",
+                Command::Upgrade {
+                    tower_id: *tower_id,
+                    upgrade_type: UpgradeType::Range
+                }
+            );
+            // println!("PASS");
         }
     }
 }
