@@ -79,7 +79,7 @@ impl Player {
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.split(" ").collect::<Vec<_>>();
         Self {
-            side: side,
+            side,
             money: inputs[0].trim().parse().unwrap(),
             live: inputs[1].trim().parse().unwrap(),
         }
@@ -256,10 +256,8 @@ struct Tower {
     coordinates: (usize, usize),
     damage: usize,
     range: f64,
-    reload: usize,
-
     /// number of turns left before being able to fire again
-    cooldown: usize,
+    reload: usize,
 
     /// upgrade level of the tower
     damage_level: u8,
@@ -288,14 +286,6 @@ impl Tower {
         t.damage_level = t.damage_level();
         t.range_level = t.range_level();
         t
-    }
-
-    fn is_upgradable(&self, up_type: UpgradeType) -> bool {
-        match up_type {
-            UpgradeType::Damage => self.damage_level < 3,
-            UpgradeType::Range => self.range_level < 3,
-            UpgradeType::Reload => self.reload_level < 3,
-        }
     }
 
     /// Get the cost for specific upgrades
@@ -543,9 +533,9 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::Bounty,
-                    1,
+                    0,
                 ) + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 1)
-                    + Self::from_map(map)
+                    + 5 * Self::from_map(map)
             }
             TowerType::Fire => {
                 Self::from_attackers(
@@ -553,7 +543,7 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    5,
+                    10,
                 ) + Self::from_map(map)
                     + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
                     + Self::from_side(map.size(), my_side.invert())
@@ -831,30 +821,29 @@ fn main() {
         }
         if me.money >= command.get_price(&towers).unwrap_or(me.money + 1) {
             println!("{}", command);
-            match command {
-                Command::Upgrade {
-                    tower_id: i,
-                    upgrade_type: UpgradeType::Reload,
-                } => {
-                    previous_towers = previous_towers
-                        .drain(..)
-                        .map(|t: Tower| {
-                            if t.id == i {
-                                Tower {
-                                    reload_level: t.reload_level + 1,
-                                    ..t
-                                }
-                            } else {
-                                t
+            if let Command::Upgrade {
+                tower_id: i,
+                upgrade_type: UpgradeType::Reload,
+            } = command
+            {
+                previous_towers = previous_towers
+                    .drain(..)
+                    .map(|t: Tower| {
+                        if t.id == i {
+                            Tower {
+                                reload_level: t.reload_level + 1,
+                                ..t
                             }
-                        })
-                        .collect();
-                }
-                _ => {}
+                        } else {
+                            t
+                        }
+                    })
+                    .collect();
             }
         } else {
             println!("PASS")
         }
+        // TODO: update previous_towers with towers
         previous_towers = towers.clone();
     }
 }
