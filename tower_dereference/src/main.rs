@@ -706,6 +706,25 @@ fn get_upgrade_commands(towers: &[Tower], me: Side) -> Vec<Command> {
         .collect()
 }
 
+fn update_towers(a: &[Tower], b: &[Tower]) -> Vec<Tower> {
+    let mut a: Vec<_> = a.to_vec();
+    let mut b: Vec<_> = b.to_vec();
+    let mut res = Vec::new();
+    while let Some(ta) = a.pop() {
+        if let Some(idx) = b.iter().position(|t| t.id == ta.id) {
+            res.push(Tower {
+                reload_level : b.remove(idx).reload_level.max(ta.reload_level),
+                ..ta
+            }
+            )
+        } else {
+            res.push(ta)
+        }
+    }
+    res.extend(b);
+    res
+}
+
 /**
  * Survive the attack waves
  **/
@@ -843,7 +862,6 @@ fn main() {
         } else {
             println!("PASS")
         }
-        // TODO: update previous_towers with towers
-        previous_towers = towers.clone();
+        previous_towers = update_towers(&previous_towers, &towers);
     }
 }
