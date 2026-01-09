@@ -243,7 +243,7 @@ impl fmt::Display for UpgradeType {
 
 impl UpgradeType {
     fn get_all() -> Vec<Self> {
-        vec![Self::Damage, Self::Range, Self::Reload]
+        vec![Self::Reload, Self::Damage, Self::Range]
     }
 }
 
@@ -605,9 +605,9 @@ impl ScoreMap {
     fn get_ordered_map(&self) -> Vec<(usize, usize)> {
         let s = self.size();
         let mut scores = iproduct!(0..s.0, 0..s.1)
-            .map(|(a, b)| (self.0[a][b], (a, b)))
+            .map(|(a, b)| (self.0[a][b], (a, b))) // (score, (line_num, col_num))
             .collect::<Vec<_>>();
-        scores.sort_by_key(|(s, _)| *s);
+        scores.sort_by_key(|(s, _)| -*s);
         scores.iter().map(|(_, e)| e).copied().collect::<Vec<_>>()
     }
 
@@ -713,10 +713,9 @@ fn update_towers(a: &[Tower], b: &[Tower]) -> Vec<Tower> {
     while let Some(ta) = a.pop() {
         if let Some(idx) = b.iter().position(|t| t.id == ta.id) {
             res.push(Tower {
-                reload_level : b.remove(idx).reload_level.max(ta.reload_level),
+                reload_level: b.remove(idx).reload_level.max(ta.reload_level),
                 ..ta
-            }
-            )
+            })
         } else {
             res.push(ta)
         }
@@ -819,7 +818,7 @@ fn main() {
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         // println!("BUILD 5 5 GUNTOWER"); // BUILD x y TOWER | UPGRADE id PROPERTY
         let mut score = if attackers.is_empty() {
-            3 * ScoreMap::from_map(&map) + ScoreMap::from_side(map.size(), me.side)
+            20 * ScoreMap::from_map(&map) + ScoreMap::from_side(map.size(), opponent.side)
         } else {
             ScoreMap::tower_preference(&map, tower_type, me.side, &attackers, &towers)
         };
@@ -838,7 +837,22 @@ fn main() {
                 command = c.clone();
             }
         }
-        if me.money >= command.get_price(&towers).unwrap_or(me.money + 1) {
+        if attackers.is_empty() {
+            // first round
+            let commands = score.get_ordered_map()[0..10]
+                .iter()
+                .map(|&coords| {
+                    format!(
+                        "{}",
+                        Command::Build {
+                            coords,
+                            tower_type: TowerType::Gun
+                        }
+                    )
+                })
+                .collect::<Vec<_>>();
+            println!("{}", commands.join(";"))
+        } else if me.money >= command.get_price(&towers).unwrap_or(me.money + 1) {
             println!("{}", command);
             if let Command::Upgrade {
                 tower_id: i,
