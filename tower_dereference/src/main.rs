@@ -831,8 +831,8 @@ fn main() {
             coords: build_coords,
             tower_type,
         };
-        let nums: Vec<usize> = (1..500).collect();
-        if nums.choose(&mut rng).unwrap() < &towers.len() {
+        let nums: Vec<usize> = (1..100000).collect();
+        if *nums.choose(&mut rng).unwrap() < towers.len().pow(2) {
             let upgrade_commands = get_upgrade_commands(&towers, me.side);
             if let Some(c) = upgrade_commands.first() {
                 command = c.clone();
