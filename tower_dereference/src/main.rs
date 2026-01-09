@@ -482,8 +482,8 @@ impl ScoreMap {
             (0..size.1)
                 .map(|a| {
                     let m = match side {
-                        Side::Left => 1,
-                        Side::Right => -1,
+                        Side::Left => -1,
+                        Side::Right => 1,
                     };
                     m * (a as i32 - (size.1 as i32) / 2)
                 })
@@ -543,10 +543,17 @@ impl ScoreMap {
                     attackers,
                     my_side.invert(),
                     Property::HitPoint,
-                    10,
+                    5,
                 ) + Self::from_map(map)
-                    + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 2)
+                    + Self::from_towers(map.size(), towers, my_side, &[TowerType::Glue], 5)
                     + Self::from_side(map.size(), my_side.invert())
+                    - Self::with_value(
+                        map.size(),
+                        1 * towers
+                            .iter()
+                            .filter(|t| t.tower_type == TowerType::Glue)
+                            .count() as i32,
+                    )
             }
             TowerType::Glue => {
                 Self::from_attackers(map.size(), attackers, my_side.invert(), Property::Speed, 5)
@@ -567,7 +574,7 @@ impl ScoreMap {
                     )
                     - Self::with_value(
                         map.size(),
-                        10 * towers
+                        100 * towers
                             .iter()
                             .filter(|t| t.tower_type == TowerType::Glue)
                             .count() as i32,
@@ -831,7 +838,7 @@ fn main() {
             tower_type,
         };
         let nums: Vec<usize> = (1..100000).collect();
-        if *nums.choose(&mut rng).unwrap() < towers.len().pow(2) {
+        if *nums.choose(&mut rng).unwrap() < towers.len().pow(3) {
             let upgrade_commands = get_upgrade_commands(&towers, me.side);
             if let Some(c) = upgrade_commands.first() {
                 command = c.clone();
@@ -839,7 +846,9 @@ fn main() {
         }
         if attackers.is_empty() {
             // first round
-            let commands = score.get_ordered_map()[0..10]
+            eprintln!("{}", &score);
+            dbg!(score.get(dbg!(score.get_whichmax())));
+            let commands = score.get_ordered_map()[0..3]
                 .iter()
                 .map(|&coords| {
                     format!(
