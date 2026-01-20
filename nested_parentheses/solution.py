@@ -1,6 +1,5 @@
 # https://www.codingame.com/ide/puzzle/level-of-nested-parentheses
 
-
 def get_groups(s):
     """
     Args:
@@ -29,14 +28,27 @@ def get_groups(s):
     return final_groups
 
 
+def get_level(s):
+    """Get number of nested level for each index"""
+    level = 0
+    results = []
+    for c in s:
+        if c == "(":
+            level += 1
+        if c == ")":
+            level -= 1
+        results.append(level)
+    assert level == 0
+    return results
+
+
 def get_line(n, s):
     """get the nth line"""
     groups = get_groups(s)
+    nested_levels = get_level(s)
+    # print("".join(str(a) for a in nested_levels), file=sys.stderr)
     if not groups:
         return
-    max_level = max(a for (a, _, _) in groups)
-    if n > max_level + 1:
-        assert False, "unreachable"
     line = [" "] * len(s)
     if n == 0 or n == 1:
         char = "^" if n == 0 else "|"
@@ -52,8 +64,9 @@ def get_line(n, s):
         if l == n:
             for idx in range(a, b):
                 line[idx] = "-"
-            line[a] = str(max_level - l + 1)
-            line[b] = str(max_level - l + 1)
+            level = min(nested_levels[a:b])
+            line[a] = str(level)
+            line[b] = str(level)
     return "".join(line)
 
 
@@ -65,3 +78,6 @@ def print_answer(s):
     max_level = max(a for (a, _, _) in groups)
     for l in range(max_level + 2):
         print(get_line(l, s))
+
+
+print_answer(input())
