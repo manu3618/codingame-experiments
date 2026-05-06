@@ -43,6 +43,8 @@ def get_level(s):
 
 def get_group_level(s):
     groups = get_groups(s)
+    if not groups:
+        return groups
     levels = {a for (a, _, _) in groups}
     missing = [a for a in range(1, max(levels)) if a not in levels]
     while missing:
