@@ -1,7 +1,7 @@
 // https://www.codingame.com/ide/puzzle/drug-interactions
 //
 use itertools::iproduct;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io;
 
@@ -12,7 +12,7 @@ macro_rules! parse_input {
 }
 
 // TODO: add memoization
-fn safe_together(a: String, b: String) -> bool {
+fn safe_together(a: &str, b: &str) -> bool {
     let a: Vec<char> = a.to_lowercase().chars().collect();
     let mut b: Vec<char> = b.to_lowercase().chars().collect();
     let mut counter = 0;
@@ -28,10 +28,24 @@ fn safe_together(a: String, b: String) -> bool {
     counter < 4
 }
 
+#[derive(Debug, Default)]
+struct SafeTogether(HashMap<(String, String), bool>);
+
+impl SafeTogether {
+    fn safe_together(&mut self, a: &str, b: &str) -> bool {
+        let value = self
+            .0
+            .entry((a.to_string(), b.to_string()))
+            .or_insert(safe_together(a, b));
+        *value
+    }
+}
+
 /// Is the list/set of drugs safe to take together
 ///
 /// return false if any couple of drugs is bad together
 fn set_safe(drugs: &[String]) -> bool {
+    let mut st = SafeTogether::default();
     let drug_couples = iproduct!(drugs, drugs)
         .map(|(d1, d2)| if d1 < d2 { (d1, d2) } else { (d2, d1) })
         .collect::<HashSet<_>>();
@@ -40,7 +54,7 @@ fn set_safe(drugs: &[String]) -> bool {
         // .inspect(|(d1, d2)| {
         //     dbg!(d1, d2, safe_together(d1.to_string(), d2.to_string()));
         // })
-        .filter(|(d1, d2)| safe_together(d1.to_string(), d2.to_string()))
+        .filter(|(d1, d2)| st.safe_together(d1, d2))
         .collect::<Vec<_>>()
         .is_empty()
 }
