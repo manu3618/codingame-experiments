@@ -3,6 +3,7 @@
 use itertools::iproduct;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::io;
 
 macro_rules! parse_input {
@@ -60,60 +61,88 @@ fn set_safe(drugs: &[String]) -> bool {
 }
 
 fn resolve(drugs: Vec<String>) -> usize {
-    // let drug_lists = get_combinations(drugs.clone());
     let drug_lists = Combinations::new(drugs);
-    //dbg!(drug_lists.clone().iter().map(|c|c.len()).collect::<Vec<_>>());
-    // dbg!(counter(
-    //     &drug_lists.clone().iter().map(|c| c.len()).collect()
-    // ));
+    let mut previous_len = 0;
+    let mut cur_len = 0;
+    let mut cur_len_safe = true;
     for drug_list in drug_lists {
-        if drug_list.len() != 5 {
-            //  XXX DEBUG
-            // continue;
+        cur_len = drug_list.len();
+
+        if cur_len != previous_len {
+            // new length, reset all
+            if !cur_len_safe {
+                return previous_len;
+            }
+            cur_len_safe = false;
         }
+
         if set_safe(&drug_list) {
-            dbg!(&drug_list);
-            return drug_list.len();
+            cur_len_safe = true
         }
+        previous_len = drug_list.len();
     }
-    0
+    if cur_len_safe { cur_len } else { cur_len - 1 }
 }
 
 #[derive(Debug)]
 struct Combinations<T: Debug> {
+    initial: Vec<T>,
     already_yield: Vec<Vec<T>>,
     next_yield: Vec<Vec<T>>,
 }
 
-impl<T: Debug> Combinations<T> {
+impl<T: Debug + Clone> Combinations<T> {
     fn new(items: Vec<T>) -> Self {
         Self {
+            initial: items.clone(),
             already_yield: Vec::new(),
-            next_yield: vec![items],
+            next_yield: items.iter().map(|x| vec![x.clone()]).collect(),
         }
     }
 }
 
-impl<T: Eq + Clone + Debug> Iterator for Combinations<T> {
+impl<T: Eq + Clone + Debug + Hash + Ord> Iterator for Combinations<T> {
     type Item = Vec<T>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_yield.is_empty() {
             return None;
         } else if self.next_yield.len() == 1 {
-            // repopulate next_yield
             self.already_yield.push(self.next_yield.pop().unwrap());
-            'outer: for candidate in self.already_yield.iter().rev() {
-                for idx in 0..candidate.len() {
-                    let mut new_comb = candidate.clone();
-                    new_comb.remove(idx);
-                    if self.already_yield.contains(&new_comb) {
-                        break 'outer;
-                    }
-                    self.next_yield.push(new_comb);
-                }
+            for to_alter in self.already_yield.iter().rev() {
+                let mut to_add: Vec<Vec<T>> = self
+                    .initial
+                    .iter()
+                    .filter_map(|elt| {
+                        if to_alter.contains(elt) {
+                            None
+                        } else {
+                            let mut new = to_alter.clone();
+                            new.push(elt.clone());
+                            Some(new)
+                        }
+                    })
+                    .filter(|x| !self.already_yield.contains(x) && !self.next_yield.contains(x))
+                    .collect();
+                self.next_yield.append(&mut to_add);
             }
+            let binding = self
+                .next_yield
+                .iter()
+                .map(|x| {
+                    let mut a = x.clone();
+                    a.sort();
+                    a
+                })
+                .collect::<HashSet<_>>();
+            self.next_yield = binding.iter().cloned().collect();
+            self.next_yield.sort_by_key(|x| x.len());
         } else {
-            self.already_yield.push(self.next_yield.pop().unwrap());
+            // next_yield not empty
+            let next_elt = self.next_yield.pop().unwrap();
+            if next_elt.len() == self.initial.len() {
+                self.next_yield.truncate(0);
+            }
+            self.already_yield.push(next_elt);
         }
         self.already_yield.last().cloned()
     }
