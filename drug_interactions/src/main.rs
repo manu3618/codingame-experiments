@@ -3,7 +3,6 @@
 use itertools::iproduct;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::io;
 
 macro_rules! parse_input {
@@ -61,90 +60,78 @@ fn set_safe(drugs: &[String]) -> bool {
 }
 
 fn resolve(drugs: Vec<String>) -> usize {
-    let drug_lists = Combinations::new(drugs);
-    let mut previous_len = 0;
-    let mut cur_len = 0;
-    let mut cur_len_safe = true;
-    for drug_list in drug_lists {
-        cur_len = drug_list.len();
+    let mut indexes = CombinationIndexes::default();
+    for list_len in (0..drugs.len()).rev() {
+        let comb_indexes = indexes.get_comb(list_len, drugs.len());
+        dbg!(list_len, drugs.len(), comb_indexes.len());
+        for comb_index in comb_indexes {
+            let drug_list: Vec<String> = comb_index.iter().map(|&idx| drugs[idx].clone()).collect();
 
-        if cur_len != previous_len {
-            // new length, reset all
-            if !cur_len_safe {
-                return previous_len;
+            if set_safe(&drug_list) {
+                return list_len;
             }
-            cur_len_safe = false;
-        }
-
-        if set_safe(&drug_list) {
-            cur_len_safe = true
-        }
-        previous_len = drug_list.len();
-    }
-    if cur_len_safe { cur_len } else { cur_len - 1 }
-}
-
-#[derive(Debug)]
-struct Combinations<T: Debug> {
-    initial: Vec<T>,
-    already_yield: Vec<Vec<T>>,
-    next_yield: Vec<Vec<T>>,
-}
-
-impl<T: Debug + Clone> Combinations<T> {
-    fn new(items: Vec<T>) -> Self {
-        Self {
-            initial: items.clone(),
-            already_yield: Vec::new(),
-            next_yield: items.iter().map(|x| vec![x.clone()]).collect(),
         }
     }
+    0
 }
 
-impl<T: Eq + Clone + Debug + Hash + Ord> Iterator for Combinations<T> {
-    type Item = Vec<T>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_yield.is_empty() {
-            return None;
-        } else if self.next_yield.len() == 1 {
-            self.already_yield.push(self.next_yield.pop().unwrap());
-            for to_alter in self.already_yield.iter().rev() {
-                let mut to_add: Vec<Vec<T>> = self
-                    .initial
-                    .iter()
-                    .filter_map(|elt| {
-                        if to_alter.contains(elt) {
-                            None
-                        } else {
-                            let mut new = to_alter.clone();
-                            new.push(elt.clone());
-                            Some(new)
-                        }
-                    })
-                    .filter(|x| !self.already_yield.contains(x) && !self.next_yield.contains(x))
-                    .collect();
-                self.next_yield.append(&mut to_add);
-            }
-            let binding = self
-                .next_yield
-                .iter()
-                .map(|x| {
-                    let mut a = x.clone();
-                    a.sort();
-                    a
-                })
-                .collect::<HashSet<_>>();
-            self.next_yield = binding.iter().cloned().collect();
-            self.next_yield.sort_by_key(|x| x.len());
+#[derive(Debug, Default)]
+struct CombinationIndexes {
+    results: HashMap<(usize, usize), HashSet<Vec<usize>>>,
+}
+
+impl CombinationIndexes {
+    fn get_comb(&mut self, k: usize, n: usize) -> HashSet<Vec<usize>> {
+        match self.results.get(&(k, n)) {
+            Some(r) => return r.clone(),
+            None => {}
+        }
+
+        let result: HashSet<Vec<_>> = if k == 0 {
+            Default::default()
+        } else if k == 1 {
+            (0..n).map(|x| vec![x]).collect()
+        } else if k >= n {
+            [(0..n).collect()].into()
         } else {
-            // next_yield not empty
-            let next_elt = self.next_yield.pop().unwrap();
-            if next_elt.len() == self.initial.len() {
-                self.next_yield.truncate(0);
-            }
-            self.already_yield.push(next_elt);
-        }
-        self.already_yield.last().cloned()
+            iproduct!(comb(k - 1, n), 0..n)
+                .filter_map(|(old, new)| {
+                    if old.contains(&new) {
+                        None
+                    } else {
+                        let mut binding = old.clone();
+                        binding.push(new);
+                        binding.sort();
+                        Some(binding)
+                    }
+                })
+                .collect()
+        };
+        self.results.insert((k, n), result.clone());
+        result
+    }
+}
+
+fn comb(k: usize, n: usize) -> HashSet<Vec<usize>> {
+    if k == 0 {
+        Default::default()
+    } else if k == 1 {
+        (0..n).map(|x| vec![x]).collect()
+    } else if k >= n {
+        [(0..n).collect()].into()
+    } else {
+        iproduct!(comb(k - 1, n), 0..n)
+            .filter_map(|(old, new)| {
+                if old.contains(&new) {
+                    None
+                } else {
+                    let mut binding = old.clone();
+                    binding.push(new);
+                    binding.sort();
+                    Some(binding)
+                }
+            })
+            .collect()
     }
 }
 
