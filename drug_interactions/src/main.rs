@@ -11,7 +11,7 @@ macro_rules! parse_input {
     };
 }
 
-// TODO: add memoization
+
 fn safe_together(a: &str, b: &str) -> bool {
     let a: Vec<char> = a.to_lowercase().chars().collect();
     let mut b: Vec<char> = b.to_lowercase().chars().collect();
@@ -44,8 +44,7 @@ impl SafeTogether {
 /// Is the list/set of drugs safe to take together
 ///
 /// return false if any couple of drugs is bad together
-fn set_safe(drugs: &[String]) -> bool {
-    let mut st = SafeTogether::default();
+fn set_safe(drugs: &[String], st: &mut SafeTogether) -> bool {
     let drug_couples = iproduct!(drugs, drugs)
         .map(|(d1, d2)| if d1 < d2 { (d1, d2) } else { (d2, d1) })
         .collect::<HashSet<_>>();
@@ -61,13 +60,15 @@ fn set_safe(drugs: &[String]) -> bool {
 
 fn resolve(drugs: Vec<String>) -> usize {
     let mut indexes = CombinationIndexes::default();
+    let mut st = SafeTogether::default();
     for list_len in (0..drugs.len()).rev() {
         let comb_indexes = indexes.get_comb(list_len, drugs.len());
         dbg!(list_len, drugs.len(), comb_indexes.len());
+        dbg!(indexes.results.len());
         for comb_index in comb_indexes {
             let drug_list: Vec<String> = comb_index.iter().map(|&idx| drugs[idx].clone()).collect();
 
-            if set_safe(&drug_list) {
+            if set_safe(&drug_list, &mut st) {
                 return list_len;
             }
         }
@@ -82,6 +83,31 @@ struct CombinationIndexes {
 
 impl CombinationIndexes {
     fn get_comb(&mut self, k: usize, n: usize) -> HashSet<Vec<usize>> {
+        self.get_comb_desc(k, n)
+    }
+
+    fn get_comb_desc(&mut self, k: usize, n: usize) -> HashSet<Vec<usize>> {
+        match self.results.get(&(k, n)) {
+            Some(r) => return r.clone(),
+            None => {}
+        }
+        let result = if k == n {
+            HashSet::from([(0..n).collect::<Vec<_>>()])
+        } else {
+            iproduct!(self.get_comb_desc(k + 1, n), 0..k + 1)
+                .map(|(old, removal)| {
+                    let mut binding = old.clone();
+                    binding.remove(removal);
+                    binding
+                })
+                .collect()
+        };
+
+        self.results.insert((k, n), result.clone());
+        result
+    }
+
+    fn get_comb_asc(&mut self, k: usize, n: usize) -> HashSet<Vec<usize>> {
         match self.results.get(&(k, n)) {
             Some(r) => return r.clone(),
             None => {}
@@ -94,7 +120,7 @@ impl CombinationIndexes {
         } else if k >= n {
             [(0..n).collect()].into()
         } else {
-            iproduct!(comb(k - 1, n), 0..n)
+            iproduct!(self.get_comb_asc(k - 1, n), 0..n)
                 .filter_map(|(old, new)| {
                     if old.contains(&new) {
                         None
@@ -109,29 +135,6 @@ impl CombinationIndexes {
         };
         self.results.insert((k, n), result.clone());
         result
-    }
-}
-
-fn comb(k: usize, n: usize) -> HashSet<Vec<usize>> {
-    if k == 0 {
-        Default::default()
-    } else if k == 1 {
-        (0..n).map(|x| vec![x]).collect()
-    } else if k >= n {
-        [(0..n).collect()].into()
-    } else {
-        iproduct!(comb(k - 1, n), 0..n)
-            .filter_map(|(old, new)| {
-                if old.contains(&new) {
-                    None
-                } else {
-                    let mut binding = old.clone();
-                    binding.push(new);
-                    binding.sort();
-                    Some(binding)
-                }
-            })
-            .collect()
     }
 }
 
